@@ -1,6 +1,12 @@
 pipeline {
 	agent any
 
+	environment {
+		PATH+PYTHON = 'C:\\Users\\ramya\\AppData\\Local\\Programs\\Python\\Python313'
+		PATH+PYTHON_SCRIPTS = 'C:\\Users\\ramya\\AppData\\Local\\Programs\\Python\\Python313\\Scripts'
+		PATH+DOCKER = 'C:\\Program Files\\Docker\\Docker\\resources\\bin'
+	}
+
 	stages {
 		stage('Checkout') {
 			steps {
