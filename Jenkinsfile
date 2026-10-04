@@ -10,7 +10,7 @@ pipeline {
 		stage('Verify Environment') {
 			steps {
 				bat '%PYTHON_EXE% --version'
-				bat '%DOCKER_EXE% --version'
+				bat '"%DOCKER_EXE%" --version'
 			}
 		}
 
@@ -29,7 +29,7 @@ pipeline {
 
 		stage('Build Docker Image') {
 			steps {
-				bat '%DOCKER_EXE% build -t devops-digital-twin-app:jenkins .'
+				bat '"%DOCKER_EXE%" build -t devops-digital-twin-app:jenkins .'
 			}
 		}
 	}
