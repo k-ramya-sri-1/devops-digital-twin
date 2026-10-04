@@ -17,13 +17,13 @@ pipeline {
 		stage('Install Dependencies') {
 			steps {
 				bat '%PYTHON_EXE% -m venv .venv'
-				bat '.venv/Scripts/python.exe -m pip install -r app/requirements.txt'
+				bat '.venv\\Scripts\\python.exe -m pip install -r app\\requirements.txt'
 			}
 		}
 
 		stage('Run Tests') {
 			steps {
-				bat '.venv/Scripts/python.exe -m pytest'
+				bat '.venv\\Scripts\\python.exe -m pytest'
 			}
 		}
 
