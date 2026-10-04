@@ -3,7 +3,7 @@ pipeline {
 
 	environment {
 		PYTHON_EXE = 'C:\\Users\\ramya\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'
-		DOCKER_EXE = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe'
+		DOCKER_EXE = 'C:\\Users\\ramya\\AppData\\Local\\Programs\\DockerDesktop\\resources\\bin\\docker.exe'
 	}
 
 	stages {
