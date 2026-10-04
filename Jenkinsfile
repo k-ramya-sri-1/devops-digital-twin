@@ -2,28 +2,21 @@ pipeline {
 	agent any
 
 	environment {
-		PATH+PYTHON = 'C:\\Users\\ramya\\AppData\\Local\\Programs\\Python\\Python313'
-		PATH+PYTHON_SCRIPTS = 'C:\\Users\\ramya\\AppData\\Local\\Programs\\Python\\Python313\\Scripts'
-		PATH+DOCKER = 'C:\\Program Files\\Docker\\Docker\\resources\\bin'
+		PYTHON_EXE = 'C:\\Users\\ramya\\AppData\\Local\\Programs\\Python\\Python313\\python.exe'
+		DOCKER_EXE = 'C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe'
 	}
 
 	stages {
-		stage('Checkout') {
-			steps {
-				checkout scm
-			}
-		}
-
 		stage('Verify Environment') {
 			steps {
-				bat 'python --version'
-				bat 'docker --version'
+				bat '%PYTHON_EXE% --version'
+				bat '%DOCKER_EXE% --version'
 			}
 		}
 
 		stage('Install Dependencies') {
 			steps {
-				bat 'python -m venv .venv'
+				bat '%PYTHON_EXE% -m venv .venv'
 				bat '.venv/Scripts/python.exe -m pip install -r app/requirements.txt'
 			}
 		}
@@ -36,7 +29,7 @@ pipeline {
 
 		stage('Build Docker Image') {
 			steps {
-				bat 'docker build -t devops-digital-twin-app:jenkins .'
+				bat '%DOCKER_EXE% build -t devops-digital-twin-app:jenkins .'
 			}
 		}
 	}
