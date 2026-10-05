@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: devops-digital-twin-app
-          image: devops-digital-twin-app:latest
+          image: devops-digital-twin-app:phase7
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
