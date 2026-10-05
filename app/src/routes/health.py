@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from starlette.responses import Response
 
 router = APIRouter(tags=["health"])
 
@@ -15,9 +17,5 @@ def get_health() -> HealthResponse:
 
 
 @router.get("/metrics")
-def get_metrics() -> dict[str, str | int]:
-    return {
-        "service": "devops-digital-twin",
-        "status": "running",
-        "metrics_format": "basic-json",
-    }
+def get_metrics() -> Response:
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
