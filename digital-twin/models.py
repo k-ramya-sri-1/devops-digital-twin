@@ -41,6 +41,8 @@ class Instance:
     memory_utilization: float = 0.0
     request_rate: float = 0.0
     status: InstanceStatus = InstanceStatus.STARTING
+    request_count: float = 0.0
+    request_latency_count: float = 0.0
 
     def __post_init__(self) -> None:
         _validate_name(self.name, "name")
@@ -49,6 +51,10 @@ class Instance:
         _validate_utilization(self.cpu_utilization, "cpu_utilization")
         _validate_utilization(self.memory_utilization, "memory_utilization")
         _validate_non_negative(self.request_rate, "request_rate")
+        _validate_non_negative(self.request_count, "request_count")
+        _validate_non_negative(
+            self.request_latency_count, "request_latency_count"
+        )
         if isinstance(self.status, str):
             try:
                 self.status = InstanceStatus(self.status)
