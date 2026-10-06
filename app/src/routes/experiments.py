@@ -505,3 +505,28 @@ def execute_experiment(
             detail="experiment execution failed",
         ) from error
     return _to_execution_response(result)
+
+
+@router.get(
+    "/experiments/{experiment_id}/result",
+    response_model=ExecutionResponse,
+)
+def get_execution_result(
+    experiment_id: str,
+    result_repository: ExperimentResultRepository = Depends(
+        get_experiment_result_repository
+    ),
+) -> ExecutionResponse:
+    try:
+        result = result_repository.get_by_experiment_id(experiment_id)
+    except DatabaseError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="experiment result database unavailable",
+        ) from error
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="execution result not found",
+        )
+    return _to_execution_response(result)

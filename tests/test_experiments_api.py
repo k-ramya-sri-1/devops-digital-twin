@@ -94,11 +94,22 @@ class FakeExecutor:
 
 
 class FakeResultRepository:
-    def __init__(self):
+    def __init__(self, results=None, error=None):
+        self.results = {
+            result.experiment_id: result for result in (results or [])
+        }
+        self.error = error
         self.create_calls = []
+        self.get_ids = []
 
     def create(self, result):
         self.create_calls.append(result)
+
+    def get_by_experiment_id(self, experiment_id):
+        self.get_ids.append(experiment_id)
+        if self.error is not None:
+            raise self.error
+        return self.results.get(experiment_id)
 
 
 def make_experiment(
@@ -477,3 +488,48 @@ def test_execute_rejects_blank_service_name(client, execution_setup):
     assert response.status_code == 422
     assert current_state_service.calls == 0
     assert executor.calls == []
+
+
+@pytest.fixture
+def result_repository():
+    fake = FakeResultRepository()
+    app.dependency_overrides[get_experiment_result_repository] = lambda: fake
+    yield fake
+    app.dependency_overrides.clear()
+
+
+def test_get_execution_result_returns_existing_result(client, result_repository):
+    result = make_execution_result(ScenarioType.TRAFFIC_SURGE, "EXP-RESULT")
+    result_repository.results["EXP-RESULT"] = result
+
+    response = client.get("/experiments/EXP-RESULT/result")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["experiment_id"] == "EXP-RESULT"
+    assert body["scenario_type"] == ScenarioType.TRAFFIC_SURGE.value
+    assert body["service_name"] == SERVICE_NAME
+    assert body["simulation"]["simulated_request_rate"] == 300.0
+    assert body["prediction"]["cpu_status"] == "SUFFICIENT"
+    assert body["bottleneck"]["overall_status"] == "NO_BOTTLENECK"
+    assert result_repository.get_ids == ["EXP-RESULT"]
+    assert result_repository.create_calls == []
+
+
+def test_get_execution_result_returns_not_found(client, result_repository):
+    response = client.get("/experiments/missing/result")
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "execution result not found"}
+    assert result_repository.get_ids == ["missing"]
+
+
+def test_get_execution_result_maps_database_error(client):
+    repository = FakeResultRepository(error=DatabaseError("database failed"))
+    app.dependency_overrides[get_experiment_result_repository] = lambda: repository
+
+    response = client.get("/experiments/EXP-DB/result")
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 503
+    assert response.json() == {"detail": "experiment result database unavailable"}
