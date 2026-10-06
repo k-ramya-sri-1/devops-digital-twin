@@ -50,12 +50,14 @@ class ExperimentExecutor:
     def __init__(
         self,
         repository: Any | None = None,
+        result_repository: Any | None = None,
         simulator: DigitalTwinSimulator | None = None,
         analyzer: ScenarioImpactAnalyzer | None = None,
         predictor: ResourceDemandPredictor | None = None,
         bottleneck_detector: BottleneckDetector | None = None,
     ) -> None:
         self.repository = repository
+        self.result_repository = result_repository
         self.simulator = simulator or DigitalTwinSimulator()
         self.analyzer = analyzer or ScenarioImpactAnalyzer()
         self.predictor = predictor or ResourceDemandPredictor()
@@ -102,6 +104,24 @@ class ExperimentExecutor:
                 "experiment post-simulation analysis failed"
             ) from error
 
+        execution_result = ExecutionResult(
+            experiment_id=experiment.experiment_id,
+            scenario_type=experiment.scenario_type,
+            service_name=service_name,
+            simulation=simulation,
+            impact=impact,
+            prediction=prediction,
+            bottleneck=bottleneck,
+        )
+
+        if self.result_repository is not None:
+            try:
+                self.result_repository.create(execution_result)
+            except Exception as error:
+                raise ExperimentExecutionError(
+                    "experiment execution result could not be persisted"
+                ) from error
+
         try:
             experiment.transition_to(ExperimentStatus.EXECUTED)
         except Exception as error:
@@ -120,15 +140,7 @@ class ExperimentExecutor:
                     "experiment EXECUTED status could not be persisted"
                 ) from error
 
-        return ExecutionResult(
-            experiment_id=experiment.experiment_id,
-            scenario_type=experiment.scenario_type,
-            service_name=service_name,
-            simulation=simulation,
-            impact=impact,
-            prediction=prediction,
-            bottleneck=bottleneck,
-        )
+        return execution_result
 
     @staticmethod
     def _validate_request(

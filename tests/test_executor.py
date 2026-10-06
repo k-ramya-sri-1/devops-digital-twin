@@ -182,6 +182,7 @@ def make_bottleneck() -> BottleneckResult:
 def components():
     return {
         "repository": MagicMock(),
+        "result_repository": MagicMock(),
         "simulator": MagicMock(spec=DigitalTwinSimulator),
         "analyzer": MagicMock(spec=ScenarioImpactAnalyzer),
         "predictor": MagicMock(spec=ResourceDemandPredictor),
@@ -240,7 +241,56 @@ def test_execute_orchestrates_each_scenario(
     components["repository"].update_status.assert_called_once_with(
         "EXP-TEST", ExperimentStatus.EXECUTED
     )
+    components["result_repository"].create.assert_called_once_with(result)
     assert experiment.status is ExperimentStatus.EXECUTED
+
+
+def test_result_persistence_happens_before_executed_transition(components) -> None:
+    baseline = make_infrastructure()
+    experiment = make_experiment(ScenarioType.TRAFFIC_SURGE)
+    components["simulator"].traffic_surge.return_value = make_simulation(
+        ScenarioType.TRAFFIC_SURGE, baseline
+    )
+    components["analyzer"].analyze_traffic.return_value = make_impact(
+        ScenarioType.TRAFFIC_SURGE
+    )
+    components["predictor"].predict.return_value = make_prediction()
+    components["bottleneck_detector"].analyze.return_value = make_bottleneck()
+
+    def assert_simulated(result) -> None:
+        assert experiment.status is ExperimentStatus.SIMULATED
+        assert isinstance(result, ExecutionResult)
+
+    components["result_repository"].create.side_effect = assert_simulated
+
+    result = ExperimentExecutor(**components).execute(
+        experiment, baseline, SERVICE_NAME
+    )
+
+    assert result.experiment_id == "EXP-TEST"
+    assert experiment.status is ExperimentStatus.EXECUTED
+
+
+def test_result_persistence_failure_prevents_executed_transition(components) -> None:
+    baseline = make_infrastructure()
+    experiment = make_experiment(ScenarioType.TRAFFIC_SURGE)
+    components["simulator"].traffic_surge.return_value = make_simulation(
+        ScenarioType.TRAFFIC_SURGE, baseline
+    )
+    components["analyzer"].analyze_traffic.return_value = make_impact(
+        ScenarioType.TRAFFIC_SURGE
+    )
+    components["predictor"].predict.return_value = make_prediction()
+    components["bottleneck_detector"].analyze.return_value = make_bottleneck()
+    components["result_repository"].create.side_effect = RuntimeError("storage failed")
+
+    with pytest.raises(ExperimentExecutionError, match="result"):
+        ExperimentExecutor(**components).execute(
+            experiment, baseline, SERVICE_NAME
+        )
+
+    assert experiment.status is ExperimentStatus.SIMULATED
+    components["repository"].update_status.assert_not_called()
 
 
 def test_execute_without_repository_keeps_lifecycle_and_returns_typed_results() -> None:
