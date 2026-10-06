@@ -1,0 +1,50 @@
+.app-shell { display: flex; min-height: 100vh; }
+.sidebar { display: flex; flex: 0 0 248px; flex-direction: column; padding: 28px 18px 22px; background: #14232d; color: #fff; }
+.brand { display: flex; align-items: center; gap: 12px; padding: 0 12px 34px; }
+.brand-mark { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid #88dcd0; border-radius: 8px; color: #9fe4dc; font-size: 12px; font-weight: 800; letter-spacing: .08em; }
+.brand-name { margin: 0; font-size: 15px; font-weight: 700; }
+.brand-caption { margin: 2px 0 0; color: #93a3ad; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+.nav-label { padding: 0 12px 10px; color: #657984; font-size: 10px; font-weight: 700; letter-spacing: .15em; text-transform: uppercase; }
+.nav-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.nav-item { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 7px; color: #93a3ad; font-size: 13px; font-weight: 600; text-decoration: none; }
+.nav-item.active { background: rgba(93, 183, 172, .15); color: #e8fffb; }
+.nav-mark { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid currentColor; border-radius: 5px; font-size: 9px; opacity: .8; }
+.sidebar-footer { margin-top: auto; padding: 16px 12px 0; border-top: 1px solid rgba(163, 186, 193, .15); color: #708691; font-size: 11px; line-height: 1.5; }
+.main-content { flex: 1; min-width: 0; background: #f3f6f8; }
+.main-inner { width: min(1180px, 100%); margin: 0 auto; padding: 42px 48px 56px; }
+.page-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 34px; }
+.eyebrow { margin: 0 0 10px; color: #0d8b83; font-size: 11px; font-weight: 800; letter-spacing: .17em; text-transform: uppercase; }
+.page-title { margin: 0; color: #17212b; font-size: clamp(28px, 4vw, 42px); font-weight: 700; letter-spacing: -.04em; line-height: 1.05; }
+.page-subtitle { max-width: 640px; margin: 12px 0 0; color: #6d7a85; font-size: 15px; }
+.connection-state { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border: 1px solid #dce4e8; border-radius: 7px; background: rgba(255, 255, 255, .7); color: #6d7a85; font-size: 12px; white-space: nowrap; }
+.state-dot { width: 7px; height: 7px; border-radius: 50%; background: #bd771d; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 34px; }
+.summary-card { min-height: 142px; padding: 20px; border: 1px solid #dce4e8; border-radius: 8px; background: #fff; box-shadow: 0 18px 45px rgba(20, 35, 45, .08); }
+.summary-label { margin: 0; color: #6d7a85; font-size: 12px; font-weight: 700; }
+.summary-value { margin: 22px 0 0; color: #17212b; font-size: 34px; font-weight: 700; letter-spacing: -.05em; line-height: 1; }
+.summary-accent { width: 26px; height: 3px; margin-top: 17px; border-radius: 2px; background: #0d8b83; }
+.summary-card:nth-child(2) .summary-accent { background: #3372a8; }
+.summary-card:nth-child(3) .summary-accent { background: #557d69; }
+.summary-card:nth-child(4) .summary-accent { background: #9c7350; }
+.content-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(260px, .75fr); gap: 20px; }
+.panel { overflow: hidden; border: 1px solid #dce4e8; border-radius: 8px; background: #fff; box-shadow: 0 18px 45px rgba(20, 35, 45, .08); }
+.panel-heading { display: flex; align-items: center; justify-content: space-between; padding: 20px 22px; border-bottom: 1px solid #dce4e8; }
+.panel-title { margin: 0; color: #17212b; font-size: 15px; font-weight: 700; }
+.panel-note { margin: 0; color: #6d7a85; font-size: 11px; }
+.experiment-table { width: 100%; border-collapse: collapse; text-align: left; }
+.experiment-table th { padding: 12px 22px; color: #8a979e; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.experiment-table td { padding: 16px 22px; border-top: 1px solid #edf1f3; color: #6d7a85; font-size: 13px; }
+.experiment-table td:first-child { color: #17212b; font-family: Consolas, monospace; font-size: 12px; font-weight: 700; }
+.experiment-name { color: #17212b !important; font-weight: 600; }
+.scenario-name { font-family: Consolas, monospace; font-size: 11px !important; }
+.status-badge { display: inline-flex; padding: 5px 8px; border-radius: 4px; background: #eef2f3; color: #66757c; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+.status-badge.executed { background: #e5f2e9; color: #37734d; }
+.status-badge.validated { background: #e9eef8; color: #4a679b; }
+.posture-list { margin: 0; padding: 0 22px; list-style: none; }
+.posture-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 17px 0; border-bottom: 1px solid #edf1f3; color: #17212b; font-size: 13px; font-weight: 600; }
+.posture-row:last-child { border-bottom: 0; }
+.posture-status { color: #6d7a85; font-size: 11px; font-weight: 500; }
+.posture-status.ready { color: #0d8b83; }
+.placeholder-copy { margin: 4px 22px 22px; color: #6d7a85; font-size: 12px; line-height: 1.6; }
+@media (max-width: 900px) { .sidebar { flex-basis: 210px; } .main-inner { padding: 34px 28px 44px; } .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .content-grid { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .app-shell { display: block; } .sidebar { padding: 16px; } .brand { padding: 0 8px 16px; } .nav-label, .sidebar-footer { display: none; } .nav-list { display: flex; gap: 6px; overflow-x: auto; } .nav-item { flex: 0 0 auto; min-height: 38px; padding: 0 10px; font-size: 12px; } .main-inner { padding: 28px 16px 36px; } .page-header { display: block; margin-bottom: 26px; } .connection-state { display: inline-flex; margin-top: 20px; } .summary-grid { gap: 10px; } .summary-card { min-height: 120px; padding: 15px; } .summary-value { margin-top: 16px; font-size: 28px; } .summary-accent { margin-top: 13px; } .experiment-table th, .experiment-table td { padding-right: 12px; padding-left: 12px; } .experiment-table th:nth-child(3), .experiment-table td:nth-child(3) { display: none; } }
