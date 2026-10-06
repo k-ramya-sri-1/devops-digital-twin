@@ -1,4 +1,6 @@
+# ==============================
 # Python
+# ==============================
 __pycache__/
 *.py[cod]
 *.pyo
@@ -7,29 +9,60 @@ __pycache__/
 venv/
 env/
 
-# Environment variables
+# ==============================
+# Environment variables / secrets
+# ==============================
 .env
+.env.*
+!.env.example
+!.env.template
 
-# VS Code
-.vscode/
+# Credentials / secret files
+credentials.json
+secrets.json
+*.secret
 
-# OS
-.DS_Store
-Thumbs.db
+# Private keys / certificates
+*.pem
+*.key
+*.p12
+*.pfx
 
-# Logs
-*.log
+# Local configuration
+*.local
 
-# Node
+# ==============================
+# Node / Frontend
+# ==============================
 node_modules/
-
-# Build files
 dist/
 build/
 
+# ==============================
+# IDE
+# ==============================
+.vscode/
+.idea/
+
+# ==============================
+# Logs
+# ==============================
+*.log
+logs/
+
+# ==============================
+# OS
+# ==============================
+.DS_Store
+Thumbs.db
+
+# ==============================
 # Docker
+# ==============================
 *.tar
 
+# ==============================
 # Temporary files
+# ==============================
 *.tmp
 *.temp
