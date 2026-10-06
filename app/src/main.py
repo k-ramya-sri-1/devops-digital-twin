@@ -3,7 +3,7 @@ from time import perf_counter
 from fastapi import FastAPI
 from prometheus_client import Counter, Histogram
 
-from app.src.routes import data, health, orders, users
+from app.src.routes import data, experiments, health, orders, users
 
 
 HTTP_REQUESTS_TOTAL = Counter(
@@ -50,3 +50,4 @@ app.include_router(health.router)
 app.include_router(users.router)
 app.include_router(data.router)
 app.include_router(orders.router)
+app.include_router(experiments.router)
