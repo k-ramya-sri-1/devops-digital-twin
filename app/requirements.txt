@@ -3,3 +3,5 @@ uvicorn
 pytest
 httpx
 prometheus-client
+mysql-connector-python
+python-dotenv
