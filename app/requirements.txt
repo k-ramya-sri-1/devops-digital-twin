@@ -5,3 +5,4 @@ httpx
 prometheus-client
 mysql-connector-python
 python-dotenv
+kubernetes
