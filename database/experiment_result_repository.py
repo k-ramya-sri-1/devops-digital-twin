@@ -18,6 +18,10 @@ predictor_module = importlib.import_module("digital-twin.predictor")
 bottleneck_module = importlib.import_module("digital-twin.bottleneck")
 experiment_module = importlib.import_module("digital-twin.experiment")
 executor_module = importlib.import_module("digital-twin.executor")
+actual_result_module = importlib.import_module("digital-twin.actual_result")
+prediction_comparison_module = importlib.import_module(
+    "digital-twin.prediction_comparison"
+)
 
 Infrastructure = models_module.Infrastructure
 Service = models_module.Service
@@ -36,6 +40,9 @@ ResourceStatus = predictor_module.ResourceStatus
 BottleneckResult = bottleneck_module.BottleneckResult
 BottleneckStatus = bottleneck_module.BottleneckStatus
 ExecutionResult = executor_module.ExecutionResult
+ActualKubernetesResult = actual_result_module.ActualKubernetesResult
+PredictionMetricComparison = prediction_comparison_module.PredictionMetricComparison
+PredictionVsActualResult = prediction_comparison_module.PredictionVsActualResult
 
 
 class ExperimentResultRepository:
@@ -58,7 +65,8 @@ class ExperimentResultRepository:
         query = (
             "INSERT INTO experiment_results "
             "(experiment_id, scenario_type, service_name, simulation, impact, "
-            "prediction, bottleneck) VALUES (%s, %s, %s, %s, %s, %s, %s)"
+            "prediction, bottleneck, actual_result, prediction_comparison) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, NULL)"
         )
         values = (
             result.experiment_id,
@@ -114,6 +122,85 @@ class ExperimentResultRepository:
         finally:
             self._close(cursor, connection)
 
+    def update_actual_comparison(
+        self,
+        experiment_id: str,
+        actual_result: ActualKubernetesResult,
+        prediction_comparison: PredictionVsActualResult,
+    ) -> None:
+        """Persist actual Kubernetes data and its prediction comparison."""
+        self._validate_experiment_id(experiment_id)
+        if not isinstance(actual_result, ActualKubernetesResult):
+            raise DatabaseError("actual_result must be an ActualKubernetesResult")
+        if not isinstance(prediction_comparison, PredictionVsActualResult):
+            raise DatabaseError(
+                "prediction_comparison must be a PredictionVsActualResult"
+            )
+        query = (
+            "UPDATE experiment_results SET actual_result = %s, "
+            "prediction_comparison = %s WHERE experiment_id = %s"
+        )
+        values = (
+            json.dumps(self._serialize(actual_result)),
+            json.dumps(self._serialize(prediction_comparison)),
+            experiment_id,
+        )
+        connection = self._open()
+        cursor = None
+        try:
+            cursor = connection.cursor()
+            cursor.execute(query, values)
+            if cursor.rowcount == 0:
+                raise DatabaseError(f"experiment result not found: {experiment_id}")
+            connection.commit()
+        except DatabaseError:
+            self._rollback(connection)
+            raise
+        except Exception as error:
+            self._rollback(connection)
+            self._raise_operation_error(error, "update actual experiment comparison")
+        finally:
+            self._close(cursor, connection)
+
+    def get_actual_comparison(
+        self, experiment_id: str
+    ) -> tuple[ActualKubernetesResult | None, PredictionVsActualResult | None]:
+        """Retrieve the optional actual result and prediction comparison."""
+        self._validate_experiment_id(experiment_id)
+        query = (
+            "SELECT actual_result, prediction_comparison FROM experiment_results "
+            "WHERE experiment_id = %s"
+        )
+        connection = self._open()
+        cursor = None
+        try:
+            cursor = connection.cursor()
+            cursor.execute(query, (experiment_id,))
+            row = cursor.fetchone()
+            if row is None:
+                return (None, None)
+            actual_data = self._optional_json_mapping(row[0])
+            comparison_data = self._optional_json_mapping(row[1])
+            actual_result = (
+                None
+                if actual_data is None
+                else self._deserialize_actual_result(actual_data)
+            )
+            prediction_comparison = (
+                None
+                if comparison_data is None
+                else self._deserialize_prediction_comparison(comparison_data)
+            )
+            return actual_result, prediction_comparison
+        except DatabaseError:
+            raise
+        except (IndexError, KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            raise DatabaseError(
+                "invalid experiment result data returned by database"
+            ) from error
+        finally:
+            self._close(cursor, connection)
+
     def _open(self) -> Any:
         try:
             return self._connection_factory(self._config)
@@ -154,6 +241,64 @@ class ExperimentResultRepository:
         if not isinstance(parsed, Mapping):
             raise TypeError("result JSON must contain an object")
         return parsed
+
+    @staticmethod
+    def _optional_json_mapping(value: Any) -> Mapping[str, Any] | None:
+        if value is None:
+            return None
+        return ExperimentResultRepository._json_mapping(value)
+
+    @staticmethod
+    def _validate_experiment_id(experiment_id: str) -> None:
+        if not isinstance(experiment_id, str) or not experiment_id.strip():
+            raise DatabaseError("experiment_id must be a non-empty string")
+
+    @staticmethod
+    def _deserialize_actual_result(
+        data: Mapping[str, Any],
+    ) -> ActualKubernetesResult:
+        return ActualKubernetesResult(
+            experiment_id=data["experiment_id"],
+            deployment_name=data["deployment_name"],
+            namespace=data["namespace"],
+            desired_replicas=data["desired_replicas"],
+            ready_replicas=data["ready_replicas"],
+            available_replicas=data["available_replicas"],
+            updated_replicas=data["updated_replicas"],
+        )
+
+    @classmethod
+    def _deserialize_prediction_comparison(
+        cls,
+        data: Mapping[str, Any],
+    ) -> PredictionVsActualResult:
+        comparisons_data = data["comparisons"]
+        if not isinstance(comparisons_data, list):
+            raise TypeError("comparisons must be a list")
+        comparisons = tuple(
+            cls._deserialize_metric_comparison(comparison)
+            for comparison in comparisons_data
+        )
+        return PredictionVsActualResult(
+            experiment_id=data["experiment_id"],
+            comparisons=comparisons,
+            overall_status=data["overall_status"],
+        )
+
+    @staticmethod
+    def _deserialize_metric_comparison(
+        data: Mapping[str, Any],
+    ) -> PredictionMetricComparison:
+        if not isinstance(data, Mapping):
+            raise TypeError("comparison must be an object")
+        return PredictionMetricComparison(
+            metric_name=data["metric_name"],
+            expected=data["expected"],
+            actual=data["actual"],
+            absolute_error=data["absolute_error"],
+            percentage_error=data["percentage_error"],
+            status=data["status"],
+        )
 
     @staticmethod
     def _deserialize_infrastructure(data: Mapping[str, Any]) -> Infrastructure:

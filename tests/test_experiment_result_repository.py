@@ -1,4 +1,3 @@
-from copy import deepcopy
 import importlib
 import json
 
@@ -6,6 +5,10 @@ import pytest
 
 
 models = importlib.import_module("digital-twin.models")
+actual_result_module = importlib.import_module("digital-twin.actual_result")
+prediction_comparison_module = importlib.import_module(
+    "digital-twin.prediction_comparison"
+)
 experiment_module = importlib.import_module("digital-twin.experiment")
 executor_module = importlib.import_module("digital-twin.executor")
 repository_module = importlib.import_module("database.experiment_result_repository")
@@ -14,6 +17,9 @@ Infrastructure = models.Infrastructure
 Instance = models.Instance
 InstanceStatus = models.InstanceStatus
 Service = models.Service
+ActualKubernetesResult = actual_result_module.ActualKubernetesResult
+PredictionMetricComparison = prediction_comparison_module.PredictionMetricComparison
+PredictionVsActualResult = prediction_comparison_module.PredictionVsActualResult
 Experiment = experiment_module.Experiment
 ScenarioParameters = experiment_module.ScenarioParameters
 ScenarioType = experiment_module.ScenarioType
@@ -126,10 +132,39 @@ def repository_for(cursor):
 
 
 def stored_row(result: ExecutionResult):
-    writer_cursor = FakeCursor()
-    writer, _ = repository_for(writer_cursor)
-    writer.create(result)
-    return writer_cursor.calls[0][1]
+    cursor = FakeCursor()
+    repository, _ = repository_for(cursor)
+    repository.create(result)
+    return cursor.calls[0][1]
+
+
+def make_actual_result(experiment_id: str = "EXP-COMPARISON"):
+    return ActualKubernetesResult(
+        experiment_id=experiment_id,
+        deployment_name=SERVICE_NAME,
+        namespace="default",
+        desired_replicas=4,
+        ready_replicas=4,
+        available_replicas=4,
+        updated_replicas=4,
+    )
+
+
+def make_prediction_comparison(experiment_id: str = "EXP-COMPARISON"):
+    return PredictionVsActualResult(
+        experiment_id=experiment_id,
+        comparisons=(
+            PredictionMetricComparison(
+                metric_name="replica_count",
+                expected=4,
+                actual=4,
+                absolute_error=0.0,
+                percentage_error=0.0,
+                status="MATCH",
+            ),
+        ),
+        overall_status="MATCH",
+    )
 
 
 @pytest.mark.parametrize(
@@ -138,8 +173,7 @@ def stored_row(result: ExecutionResult):
 )
 def test_round_trip_preserves_typed_execution_result(scenario_type) -> None:
     original = make_result(scenario_type, f"EXP-{scenario_type.value}")
-    row = stored_row(original)
-    repository, _ = repository_for(FakeCursor([row]))
+    repository, _ = repository_for(FakeCursor([stored_row(original)]))
 
     restored = repository.get_by_experiment_id(original.experiment_id)
 
@@ -158,7 +192,7 @@ def test_create_uses_parameterized_sql_commits_and_closes() -> None:
     repository.create(result)
 
     query, parameters = cursor.calls[0]
-    assert "VALUES (%s, %s, %s, %s, %s, %s, %s)" in query
+    assert "VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, NULL)" in query
     assert result.experiment_id not in query
     assert parameters[0] == "EXP-CREATE"
     assert parameters[1] == "TRAFFIC_SURGE"
@@ -169,14 +203,110 @@ def test_create_uses_parameterized_sql_commits_and_closes() -> None:
     assert connection.closed
 
 
+def test_update_actual_comparison_persists_parameterized_json() -> None:
+    cursor = FakeCursor()
+    repository, connection = repository_for(cursor)
+    actual_result = make_actual_result()
+    comparison = make_prediction_comparison()
+
+    repository.update_actual_comparison("EXP-COMPARISON", actual_result, comparison)
+
+    query, parameters = cursor.calls[0]
+    assert "UPDATE experiment_results SET actual_result = %s" in query
+    assert "prediction_comparison = %s" in query
+    assert "EXP-COMPARISON" not in query
+    assert json.loads(parameters[0]) == actual_result.to_dict()
+    assert json.loads(parameters[1]) == comparison.to_dict()
+    assert parameters[2] == "EXP-COMPARISON"
+    assert connection.commits == 1
+    assert connection.rollbacks == 0
+    assert cursor.closed
+    assert connection.closed
+
+
+def test_get_actual_comparison_reconstructs_typed_objects() -> None:
+    actual_result = make_actual_result()
+    comparison = make_prediction_comparison()
+    row = (json.dumps(actual_result.to_dict()), json.dumps(comparison.to_dict()))
+    repository, _ = repository_for(FakeCursor([row]))
+
+    restored_actual, restored_comparison = repository.get_actual_comparison(
+        "EXP-COMPARISON"
+    )
+
+    assert restored_actual == actual_result
+    assert restored_comparison == comparison
+    assert type(restored_actual) is ActualKubernetesResult
+    assert type(restored_comparison) is PredictionVsActualResult
+    assert type(restored_comparison.comparisons[0]) is PredictionMetricComparison
+
+
+def test_get_actual_comparison_handles_legacy_null_columns() -> None:
+    repository, _ = repository_for(FakeCursor([(None, None)]))
+
+    assert repository.get_actual_comparison("EXP-LEGACY") == (None, None)
+
+
+def test_get_actual_comparison_handles_actual_only_partial_state() -> None:
+    actual_result = make_actual_result()
+    repository, _ = repository_for(
+        FakeCursor([(json.dumps(actual_result.to_dict()), None)])
+    )
+
+    restored_actual, restored_comparison = repository.get_actual_comparison(
+        "EXP-COMPARISON"
+    )
+
+    assert restored_actual == actual_result
+    assert restored_comparison is None
+
+
+def test_get_actual_comparison_handles_comparison_only_partial_state() -> None:
+    comparison = make_prediction_comparison()
+    repository, _ = repository_for(
+        FakeCursor([(None, json.dumps(comparison.to_dict()))])
+    )
+
+    restored_actual, restored_comparison = repository.get_actual_comparison(
+        "EXP-COMPARISON"
+    )
+
+    assert restored_actual is None
+    assert restored_comparison == comparison
+
+
+@pytest.mark.parametrize(
+    "row",
+    [("{invalid", None), (None, '{"comparisons": "invalid"}')],
+)
+def test_malformed_actual_comparison_json_raises_database_error(row) -> None:
+    repository, _ = repository_for(FakeCursor([row]))
+
+    with pytest.raises(DatabaseError, match="invalid experiment result data"):
+        repository.get_actual_comparison("EXP-MALFORMED-COMPARISON")
+
+
+def test_update_actual_comparison_failure_rolls_back_and_closes() -> None:
+    cursor = FakeCursor(error=FakeDatabaseError("SQL failed"))
+    repository, connection = repository_for(cursor)
+
+    with pytest.raises(DatabaseError, match="database error"):
+        repository.update_actual_comparison(
+            "EXP-COMPARISON", make_actual_result(), make_prediction_comparison()
+        )
+
+    assert connection.rollbacks == 1
+    assert cursor.closed
+    assert connection.closed
+
+
 def test_list_all_returns_typed_results() -> None:
     results = [
         make_result(ScenarioType.TRAFFIC_SURGE, "EXP-001"),
         make_result(ScenarioType.INSTANCE_FAILURE, "EXP-002"),
         make_result(ScenarioType.SCALE_OUT, "EXP-003"),
     ]
-    rows = [stored_row(result) for result in results]
-    repository, _ = repository_for(FakeCursor(rows))
+    repository, _ = repository_for(FakeCursor([stored_row(result) for result in results]))
 
     restored = repository.list_all()
 
