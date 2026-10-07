@@ -151,11 +151,12 @@ class ScenarioImpactAnalyzer:
         simulated_capacity = self._capacity(simulated_service)
         return ScaleOutImpactResult(
             service_name=simulation.service_name,
-            original_instance_count=len(original_service.instances),
-            simulated_instance_count=len(simulated_service.instances),
-            instance_count_change=(
-                len(simulated_service.instances) - len(original_service.instances)
+            original_instance_count=original_service.effective_instance_count,
+            simulated_instance_count=(
+                original_service.effective_instance_count
+                + simulation.additional_instances
             ),
+            instance_count_change=simulation.additional_instances,
             original_capacity=original_capacity,
             simulated_capacity=simulated_capacity,
             capacity_change=CapacitySnapshot(

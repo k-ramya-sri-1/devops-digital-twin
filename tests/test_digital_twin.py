@@ -45,6 +45,22 @@ def test_service_adds_instances_and_dependencies() -> None:
     assert service.dependencies == {"database", "cache"}
 
 
+def test_service_replica_count_is_validated_and_kept_separate() -> None:
+    service = Service(name="devops-digital-twin", replica_count=3)
+    service.add_instance(make_instance())
+
+    assert service.replica_count == 3
+    assert service.effective_instance_count == 3
+    assert len(service.instances) == 1
+
+    with pytest.raises(ValueError, match="replica_count"):
+        Service(name="invalid", replica_count=-1)
+    with pytest.raises(ValueError, match="replica_count"):
+        Service(name="invalid", replica_count=True)
+    with pytest.raises(ValueError, match="replica_count"):
+        Service(name="invalid", replica_count=1.5)
+
+
 def test_infrastructure_adds_and_gets_service() -> None:
     infrastructure = Infrastructure()
     service = Service(name="devops-digital-twin")

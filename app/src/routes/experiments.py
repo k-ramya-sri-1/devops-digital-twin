@@ -272,7 +272,16 @@ def get_experiment_result_repository() -> ExperimentResultRepository:
 def get_current_state_service() -> CurrentStateService:
     """Provide a current-state service backed by the configured Prometheus URL."""
     prometheus_url = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
-    return CurrentStateService(PrometheusCollector(prometheus_url))
+    deployment_name = os.getenv("KUBERNETES_DEPLOYMENT_NAME", "devops-digital-twin")
+    namespace = os.getenv("KUBERNETES_NAMESPACE", "default")
+    adapter = KubernetesExperimentAdapter(
+        deployment_name=deployment_name,
+        namespace=namespace,
+    )
+    return CurrentStateService(
+        PrometheusCollector(prometheus_url),
+        replica_count_provider=lambda: adapter.get_deployment_state().desired_replicas,
+    )
 
 
 def get_experiment_executor(

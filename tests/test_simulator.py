@@ -83,6 +83,19 @@ def test_scale_out_reports_instance_count_and_total_capacity() -> None:
     assert result.total_memory_capacity == 4096.0
 
 
+def test_scale_out_uses_explicit_baseline_replica_count() -> None:
+    infrastructure = make_infrastructure()
+    infrastructure.get_service("devops-digital-twin").set_replica_count(3)
+
+    result = DigitalTwinSimulator().scale_out(
+        infrastructure, "devops-digital-twin", 2
+    )
+
+    assert result.simulated_instance_count == 5
+    assert len(result.infrastructure.get_service("devops-digital-twin").instances) == 4
+    assert infrastructure.get_service("devops-digital-twin").effective_instance_count == 3
+
+
 def test_unknown_service_is_rejected() -> None:
     with pytest.raises(SimulationError, match="unknown service"):
         DigitalTwinSimulator().traffic_surge(make_infrastructure(), "missing", 2)

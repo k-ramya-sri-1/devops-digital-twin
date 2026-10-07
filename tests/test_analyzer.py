@@ -99,6 +99,20 @@ def test_scale_out_impact_reports_instance_and_capacity_changes() -> None:
     assert result.capacity_change.memory == 2048.0
 
 
+def test_scale_out_impact_uses_explicit_baseline_replica_count() -> None:
+    infrastructure = make_infrastructure()
+    infrastructure.get_service("devops-digital-twin").set_replica_count(3)
+    simulation = DigitalTwinSimulator().scale_out(
+        infrastructure, "devops-digital-twin", 2
+    )
+
+    result = ScenarioImpactAnalyzer().analyze_scale_out(infrastructure, simulation)
+
+    assert result.original_instance_count == 3
+    assert result.simulated_instance_count == 5
+    assert result.instance_count_change == 2
+
+
 def test_invalid_service_is_rejected() -> None:
     infrastructure = make_infrastructure()
     simulation = DigitalTwinSimulator().traffic_surge(

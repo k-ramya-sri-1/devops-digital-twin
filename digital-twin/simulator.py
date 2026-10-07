@@ -149,7 +149,9 @@ class DigitalTwinSimulator:
             infrastructure=simulated,
             service_name=service_name,
             additional_instances=additional_instances,
-            simulated_instance_count=len(simulated_service.instances),
+            simulated_instance_count=(
+                service.effective_instance_count + additional_instances
+            ),
             total_cpu_capacity=simulated_service.total_cpu_capacity,
             total_memory_capacity=simulated_service.total_memory_capacity,
         )

@@ -71,6 +71,7 @@ class Service:
     name: str
     dependencies: set[str] = field(default_factory=set)
     instances: dict[str, Instance] = field(default_factory=dict)
+    replica_count: int | None = None
 
     def __post_init__(self) -> None:
         _validate_name(self.name, "name")
@@ -80,6 +81,32 @@ class Service:
         for instance_name, instance in self.instances.items():
             if instance_name != instance.name:
                 raise ValueError("instance dictionary keys must match instance names")
+        self._validate_replica_count(self.replica_count)
+
+    @property
+    def effective_instance_count(self) -> int:
+        """Return the observed replica count when one is available."""
+        return (
+            self.replica_count
+            if self.replica_count is not None
+            else len(self.instances)
+        )
+
+    def set_replica_count(self, replica_count: int) -> None:
+        """Set the observed deployment replica count without adding instances."""
+        self._validate_replica_count(replica_count)
+        self.replica_count = replica_count
+
+    @staticmethod
+    def _validate_replica_count(replica_count: int | None) -> None:
+        if replica_count is not None and (
+            isinstance(replica_count, bool)
+            or not isinstance(replica_count, int)
+            or replica_count < 0
+        ):
+            raise ValueError(
+                "replica_count must be a non-negative integer or None"
+            )
 
     def add_dependency(self, dependency: str) -> None:
         """Add a named dependency to the service."""
