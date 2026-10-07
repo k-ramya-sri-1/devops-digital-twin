@@ -24,6 +24,11 @@ analyzer_module = importlib.import_module("digital-twin.analyzer")
 bottleneck_module = importlib.import_module("digital-twin.bottleneck")
 models_module = importlib.import_module("digital-twin.models")
 predictor_module = importlib.import_module("digital-twin.predictor")
+actual_result_module = importlib.import_module("digital-twin.actual_result")
+comparison_module = importlib.import_module("digital-twin.prediction_comparison")
+mapper_module = importlib.import_module("digital-twin.metric_mapper")
+validation_module = importlib.import_module("digital-twin.validation")
+kubernetes_adapter_module = importlib.import_module("digital-twin.kubernetes_adapter")
 PrometheusCollector = collector_module.PrometheusCollector
 PrometheusCollectorError = collector_module.PrometheusCollectorError
 CurrentStateService = current_state_module.CurrentStateService
@@ -41,6 +46,15 @@ ResourceStatus = predictor_module.ResourceStatus
 BottleneckResult = bottleneck_module.BottleneckResult
 BottleneckStatus = bottleneck_module.BottleneckStatus
 InstanceStatus = models_module.InstanceStatus
+ActualKubernetesResult = actual_result_module.ActualKubernetesResult
+PredictionMetricComparison = comparison_module.PredictionMetricComparison
+PredictionVsActualResult = comparison_module.PredictionVsActualResult
+ActualResultCollector = actual_result_module.ActualResultCollector
+PredictionVsActualAnalyzer = comparison_module.PredictionVsActualAnalyzer
+map_scale_out_replica_metrics = mapper_module.map_scale_out_replica_metrics
+ExperimentValidationService = validation_module.ExperimentValidationService
+ValidationError = validation_module.ValidationError
+KubernetesExperimentAdapter = kubernetes_adapter_module.KubernetesExperimentAdapter
 
 
 router = APIRouter(tags=["experiments"])
@@ -214,6 +228,37 @@ class ExecutionResponse(BaseModel):
     bottleneck: BottleneckResponse
 
 
+class ActualKubernetesResponse(BaseModel):
+    experiment_id: str
+    deployment_name: str
+    namespace: str
+    desired_replicas: int
+    ready_replicas: int
+    available_replicas: int
+    updated_replicas: int
+
+
+class PredictionMetricComparisonResponse(BaseModel):
+    metric_name: str
+    expected: object | None
+    actual: object | None
+    absolute_error: float | None
+    percentage_error: float | None
+    status: str
+
+
+class PredictionVsActualResponse(BaseModel):
+    experiment_id: str
+    comparisons: list[PredictionMetricComparisonResponse]
+    overall_status: str
+
+
+class ValidationResponse(BaseModel):
+    experiment_id: str
+    actual_result: ActualKubernetesResponse
+    prediction_comparison: PredictionVsActualResponse
+
+
 def get_experiment_repository() -> ExperimentRepository:
     """Provide a repository for one API request."""
     return ExperimentRepository()
@@ -240,6 +285,37 @@ def get_experiment_executor(
     return ExperimentExecutor(
         repository=repository,
         result_repository=result_repository,
+    )
+
+
+def get_actual_result_collector() -> ActualResultCollector:
+    """Provide a collector for the configured Kubernetes Deployment."""
+    deployment_name = os.getenv("KUBERNETES_DEPLOYMENT_NAME", "devops-digital-twin")
+    namespace = os.getenv("KUBERNETES_NAMESPACE", "default")
+    return ActualResultCollector(
+        KubernetesExperimentAdapter(
+            deployment_name=deployment_name,
+            namespace=namespace,
+        )
+    )
+
+
+def get_validation_service(
+    experiment_repository: ExperimentRepository = Depends(get_experiment_repository),
+    experiment_result_repository: ExperimentResultRepository = Depends(
+        get_experiment_result_repository
+    ),
+    actual_result_collector: ActualResultCollector = Depends(
+        get_actual_result_collector
+    ),
+) -> ExperimentValidationService:
+    """Provide the dependency-injected experiment validation service."""
+    return ExperimentValidationService(
+        experiment_repository=experiment_repository,
+        experiment_result_repository=experiment_result_repository,
+        actual_result_collector=actual_result_collector,
+        metric_mapper=map_scale_out_replica_metrics,
+        prediction_vs_actual_analyzer=PredictionVsActualAnalyzer(),
     )
 
 
@@ -530,3 +606,74 @@ def get_execution_result(
             detail="execution result not found",
         )
     return _to_execution_response(result)
+
+
+def _to_validation_response(result: object) -> ValidationResponse:
+    actual_result: ActualKubernetesResult = result.actual_result
+    comparison: PredictionVsActualResult = result.prediction_comparison
+    return ValidationResponse(
+        experiment_id=result.experiment_id,
+        actual_result=ActualKubernetesResponse(
+            experiment_id=actual_result.experiment_id,
+            deployment_name=actual_result.deployment_name,
+            namespace=actual_result.namespace,
+            desired_replicas=actual_result.desired_replicas,
+            ready_replicas=actual_result.ready_replicas,
+            available_replicas=actual_result.available_replicas,
+            updated_replicas=actual_result.updated_replicas,
+        ),
+        prediction_comparison=PredictionVsActualResponse(
+            experiment_id=comparison.experiment_id,
+            comparisons=[
+                PredictionMetricComparisonResponse(
+                    metric_name=item.metric_name,
+                    expected=item.expected,
+                    actual=item.actual,
+                    absolute_error=item.absolute_error,
+                    percentage_error=item.percentage_error,
+                    status=item.status,
+                )
+                for item in comparison.comparisons
+            ],
+            overall_status=comparison.overall_status,
+        ),
+    )
+
+
+@router.post(
+    "/experiments/{experiment_id}/validate",
+    response_model=ValidationResponse,
+)
+def validate_experiment(
+    experiment_id: str,
+    validation_service: ExperimentValidationService = Depends(
+        get_validation_service
+    ),
+) -> ValidationResponse:
+    try:
+        result = validation_service.validate(experiment_id)
+    except DatabaseError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="experiment validation database unavailable",
+        ) from error
+    except ValidationError as error:
+        detail = str(error)
+        if "experiment not found" in detail:
+            response_status = status.HTTP_404_NOT_FOUND
+        elif "persisted execution result not found" in detail:
+            response_status = status.HTTP_404_NOT_FOUND
+        elif "must be in EXECUTED status" in detail:
+            response_status = status.HTTP_409_CONFLICT
+        elif (
+            "could not be loaded" in detail
+            or "database" in detail
+            or "actual Kubernetes result" in detail
+            or "could not be persisted" in detail
+            or "status could not be persisted" in detail
+        ):
+            response_status = status.HTTP_503_SERVICE_UNAVAILABLE
+        else:
+            response_status = status.HTTP_422_UNPROCESSABLE_CONTENT
+        raise HTTPException(status_code=response_status, detail=detail) from error
+    return _to_validation_response(result)
