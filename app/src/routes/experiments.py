@@ -26,6 +26,7 @@ models_module = importlib.import_module("digital-twin.models")
 predictor_module = importlib.import_module("digital-twin.predictor")
 actual_result_module = importlib.import_module("digital-twin.actual_result")
 comparison_module = importlib.import_module("digital-twin.prediction_comparison")
+deployment_impact_module = importlib.import_module("digital-twin.deployment_impact")
 mapper_module = importlib.import_module("digital-twin.metric_mapper")
 validation_module = importlib.import_module("digital-twin.validation")
 kubernetes_adapter_module = importlib.import_module("digital-twin.kubernetes_adapter")
@@ -49,6 +50,9 @@ InstanceStatus = models_module.InstanceStatus
 ActualKubernetesResult = actual_result_module.ActualKubernetesResult
 PredictionMetricComparison = comparison_module.PredictionMetricComparison
 PredictionVsActualResult = comparison_module.PredictionVsActualResult
+DeploymentImpactError = deployment_impact_module.DeploymentImpactError
+DeploymentImpactReportBuilder = deployment_impact_module.DeploymentImpactReportBuilder
+ImpactSeverity = deployment_impact_module.ImpactSeverity
 ActualResultCollector = actual_result_module.ActualResultCollector
 PredictionVsActualAnalyzer = comparison_module.PredictionVsActualAnalyzer
 map_scale_out_replica_metrics = mapper_module.map_scale_out_replica_metrics
@@ -259,6 +263,19 @@ class ValidationResponse(BaseModel):
     prediction_comparison: PredictionVsActualResponse
 
 
+class DeploymentImpactResponse(BaseModel):
+    experiment_id: str
+    scenario_type: ScenarioType
+    service_name: str
+    simulated_impact: dict[str, object]
+    predicted_demand: dict[str, object]
+    bottleneck: dict[str, object]
+    actual_result: dict[str, object] | None
+    prediction_accuracy: dict[str, object] | None
+    overall_severity: ImpactSeverity
+    limitations: list[str]
+
+
 def get_experiment_repository() -> ExperimentRepository:
     """Provide a repository for one API request."""
     return ExperimentRepository()
@@ -326,6 +343,10 @@ def get_validation_service(
         metric_mapper=map_scale_out_replica_metrics,
         prediction_vs_actual_analyzer=PredictionVsActualAnalyzer(),
     )
+
+
+def _to_deployment_impact_response(report: object) -> DeploymentImpactResponse:
+    return DeploymentImpactResponse(**report.to_dict())
 
 
 def _to_experiment(request: ExperimentCreateRequest) -> object:
@@ -615,6 +636,65 @@ def get_execution_result(
             detail="execution result not found",
         )
     return _to_execution_response(result)
+
+
+@router.get(
+    "/experiments/{experiment_id}/impact",
+    response_model=DeploymentImpactResponse,
+)
+def get_deployment_impact(
+    experiment_id: str,
+    repository: ExperimentRepository = Depends(get_experiment_repository),
+    result_repository: ExperimentResultRepository = Depends(
+        get_experiment_result_repository
+    ),
+) -> DeploymentImpactResponse:
+    try:
+        experiment = repository.get_by_id(experiment_id)
+    except DatabaseError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="experiment database unavailable",
+        ) from error
+    if experiment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="experiment not found",
+        )
+
+    try:
+        execution_result = result_repository.get_by_experiment_id(experiment_id)
+    except DatabaseError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="experiment result database unavailable",
+        ) from error
+    if execution_result is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="execution result not found",
+        )
+
+    try:
+        actual_result, prediction_comparison = (
+            result_repository.get_actual_comparison(experiment_id)
+        )
+        report = DeploymentImpactReportBuilder().build(
+            execution_result,
+            actual_result,
+            prediction_comparison,
+        )
+    except DatabaseError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="experiment impact validation data unavailable",
+        ) from error
+    except DeploymentImpactError as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+    return _to_deployment_impact_response(report)
 
 
 def _to_validation_response(result: object) -> ValidationResponse:
