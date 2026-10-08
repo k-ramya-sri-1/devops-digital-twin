@@ -27,6 +27,7 @@ predictor_module = importlib.import_module("digital-twin.predictor")
 actual_result_module = importlib.import_module("digital-twin.actual_result")
 comparison_module = importlib.import_module("digital-twin.prediction_comparison")
 deployment_impact_module = importlib.import_module("digital-twin.deployment_impact")
+recommendation_module = importlib.import_module("digital-twin.recommendation")
 mapper_module = importlib.import_module("digital-twin.metric_mapper")
 validation_module = importlib.import_module("digital-twin.validation")
 kubernetes_adapter_module = importlib.import_module("digital-twin.kubernetes_adapter")
@@ -53,6 +54,10 @@ PredictionVsActualResult = comparison_module.PredictionVsActualResult
 DeploymentImpactError = deployment_impact_module.DeploymentImpactError
 DeploymentImpactReportBuilder = deployment_impact_module.DeploymentImpactReportBuilder
 ImpactSeverity = deployment_impact_module.ImpactSeverity
+RecommendationError = recommendation_module.RecommendationError
+RecommendationAction = recommendation_module.RecommendationAction
+RecommendationEngine = recommendation_module.RecommendationEngine
+RecommendationPriority = recommendation_module.RecommendationPriority
 ActualResultCollector = actual_result_module.ActualResultCollector
 PredictionVsActualAnalyzer = comparison_module.PredictionVsActualAnalyzer
 map_scale_out_replica_metrics = mapper_module.map_scale_out_replica_metrics
@@ -276,6 +281,21 @@ class DeploymentImpactResponse(BaseModel):
     limitations: list[str]
 
 
+class RecommendationResponse(BaseModel):
+    action: RecommendationAction
+    priority: RecommendationPriority
+    reason: str
+    evidence: list[str]
+    experiment_id: str
+
+
+class RecommendationReportResponse(BaseModel):
+    experiment_id: str
+    recommendations: list[RecommendationResponse]
+    overall_priority: RecommendationPriority
+    limitations: list[str]
+
+
 def get_experiment_repository() -> ExperimentRepository:
     """Provide a repository for one API request."""
     return ExperimentRepository()
@@ -347,6 +367,10 @@ def get_validation_service(
 
 def _to_deployment_impact_response(report: object) -> DeploymentImpactResponse:
     return DeploymentImpactResponse(**report.to_dict())
+
+
+def _to_recommendation_response(report: object) -> RecommendationReportResponse:
+    return RecommendationReportResponse(**report.to_dict())
 
 
 def _to_experiment(request: ExperimentCreateRequest) -> object:
@@ -695,6 +719,66 @@ def get_deployment_impact(
             detail=str(error),
         ) from error
     return _to_deployment_impact_response(report)
+
+
+@router.get(
+    "/experiments/{experiment_id}/recommendations",
+    response_model=RecommendationReportResponse,
+)
+def get_recommendations(
+    experiment_id: str,
+    repository: ExperimentRepository = Depends(get_experiment_repository),
+    result_repository: ExperimentResultRepository = Depends(
+        get_experiment_result_repository
+    ),
+) -> RecommendationReportResponse:
+    try:
+        experiment = repository.get_by_id(experiment_id)
+    except DatabaseError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="experiment database unavailable",
+        ) from error
+    if experiment is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="experiment not found",
+        )
+
+    try:
+        execution_result = result_repository.get_by_experiment_id(experiment_id)
+    except DatabaseError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="experiment result database unavailable",
+        ) from error
+    if execution_result is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="execution result not found",
+        )
+
+    try:
+        actual_result, prediction_comparison = (
+            result_repository.get_actual_comparison(experiment_id)
+        )
+        impact_report = DeploymentImpactReportBuilder().build(
+            execution_result,
+            actual_result,
+            prediction_comparison,
+        )
+        recommendation_report = RecommendationEngine().recommend(impact_report)
+    except DatabaseError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="experiment recommendation validation data unavailable",
+        ) from error
+    except (DeploymentImpactError, RecommendationError) as error:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(error),
+        ) from error
+    return _to_recommendation_response(recommendation_report)
 
 
 def _to_validation_response(result: object) -> ValidationResponse:
