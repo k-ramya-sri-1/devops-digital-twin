@@ -2,6 +2,7 @@ from time import perf_counter
 
 from fastapi import FastAPI
 from prometheus_client import Counter, Histogram
+from starlette.middleware.cors import CORSMiddleware
 
 from app.src.routes import data, experiments, health, orders, users
 
@@ -21,6 +22,16 @@ app = FastAPI(
     title="DevOps Digital Twin Demo Application",
     description="Phase 2 cloud-native demo workload for the DevOps Digital Twin project.",
     version="1.0.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Accept", "Content-Type", "Authorization"],
 )
 
 
