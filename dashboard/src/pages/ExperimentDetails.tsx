@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
 
-import { ApiError, getExperiment, getExecutionResult } from '../api/client'
-import type { ExecutionResult, Experiment } from '../types/experiment'
+import { ApiError, getDeploymentImpact, getExperiment, getExecutionResult } from '../api/client'
+import type {
+  ActualKubernetesResult,
+  BottleneckResult,
+  DeploymentImpactReport,
+  ExecutionResult,
+  Experiment,
+  ImpactResult,
+  ResourcePredictionResult,
+} from '../types/experiment'
 
 type ExperimentDetailsProps = { experimentId: string }
 
@@ -19,12 +27,58 @@ type ResultLoadState = {
   isNotFound: boolean
 }
 
+type ImpactLoadState = {
+  report: DeploymentImpactReport | null
+  isLoading: boolean
+  errorMessage: string | null
+  isNotFound: boolean
+}
+
 function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof ApiError
     ? error.detail
     : error instanceof Error
       ? error.message
       : fallback
+}
+
+function ActualResultFields({ actualResult }: { actualResult: ActualKubernetesResult }) {
+  return <dl className="details-grid result-grid">
+    <div><dt>Experiment ID</dt><dd>{actualResult.experiment_id}</dd></div>
+    <div><dt>Deployment</dt><dd>{actualResult.deployment_name}</dd></div>
+    <div><dt>Namespace</dt><dd>{actualResult.namespace}</dd></div>
+    <div><dt>Desired replicas</dt><dd>{actualResult.desired_replicas}</dd></div>
+    <div><dt>Ready replicas</dt><dd>{actualResult.ready_replicas}</dd></div>
+    <div><dt>Available replicas</dt><dd>{actualResult.available_replicas}</dd></div>
+    <div><dt>Updated replicas</dt><dd>{actualResult.updated_replicas}</dd></div>
+  </dl>
+}
+
+function PredictionFields({ prediction }: { prediction: ResourcePredictionResult }) {
+  return <dl className="details-grid result-grid">
+    <div><dt>Baseline request rate</dt><dd>{prediction.original_request_rate}</dd></div>
+    <div><dt>Simulated request rate</dt><dd>{prediction.simulated_request_rate ?? 'Not available'}</dd></div>
+    <div><dt>Workload multiplier</dt><dd>{prediction.workload_multiplier ?? 'Not available'}</dd></div>
+    <div><dt>Projected CPU demand</dt><dd>{prediction.projected_cpu_demand ?? 'Not available'}</dd></div>
+    <div><dt>Projected memory demand</dt><dd>{prediction.projected_memory_demand ?? 'Not available'}</dd></div>
+    <div><dt>CPU capacity</dt><dd>{prediction.cpu_capacity}</dd></div>
+    <div><dt>Memory capacity</dt><dd>{prediction.memory_capacity}</dd></div>
+    <div><dt>CPU status</dt><dd>{prediction.cpu_status}</dd></div>
+    <div><dt>Memory status</dt><dd>{prediction.memory_status}</dd></div>
+  </dl>
+}
+
+function BottleneckFields({ bottleneck }: { bottleneck: BottleneckResult }) {
+  return <dl className="details-grid result-grid">
+    <div><dt>Overall status</dt><dd>{bottleneck.overall_status}</dd></div>
+    <div><dt>CPU status</dt><dd>{bottleneck.cpu_status}</dd></div>
+    <div><dt>Memory status</dt><dd>{bottleneck.memory_status}</dd></div>
+    <div><dt>CPU utilization</dt><dd>{bottleneck.cpu_utilization ?? 'Not available'}</dd></div>
+    <div><dt>Memory utilization</dt><dd>{bottleneck.memory_utilization ?? 'Not available'}</dd></div>
+    <div><dt>Healthy instances</dt><dd>{bottleneck.healthy_instance_count}</dd></div>
+    <div><dt>Unhealthy instances</dt><dd>{bottleneck.unhealthy_instance_count}</dd></div>
+    <div><dt>Reasons</dt><dd>{bottleneck.reasons.join('; ')}</dd></div>
+  </dl>
 }
 
 function SimulationFields({ result }: { result: ExecutionResult }) {
@@ -59,8 +113,7 @@ function SimulationFields({ result }: { result: ExecutionResult }) {
   </>
 }
 
-function ImpactFields({ result }: { result: ExecutionResult }) {
-  const impact = result.impact
+function ImpactFields({ impact }: { impact: ImpactResult }) {
 
   if ('percentage_change' in impact) {
     return <>
@@ -103,6 +156,12 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
     errorMessage: null,
     isNotFound: false,
   })
+  const [impactState, setImpactState] = useState<ImpactLoadState>({
+    report: null,
+    isLoading: true,
+    errorMessage: null,
+    isNotFound: false,
+  })
 
   useEffect(() => {
     let isMounted = true
@@ -139,6 +198,28 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
         const isNotFound = error instanceof ApiError && error.status === 404
         const errorMessage = getErrorMessage(error, 'Unable to load the execution result.')
         setResultState({ result: null, isLoading: false, errorMessage, isNotFound })
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [experimentId, state.experiment])
+
+  useEffect(() => {
+    if (!state.experiment) return
+
+    let isMounted = true
+
+    getDeploymentImpact(experimentId)
+      .then((report) => {
+        if (!isMounted) return
+        setImpactState({ report, isLoading: false, errorMessage: null, isNotFound: false })
+      })
+      .catch((error: unknown) => {
+        if (!isMounted) return
+        const isNotFound = error instanceof ApiError && (error.status === 404 || error.status === 409)
+        const errorMessage = getErrorMessage(error, 'Unable to load the deployment impact report.')
+        setImpactState({ report: null, isLoading: false, errorMessage, isNotFound })
       })
 
     return () => {
@@ -221,34 +302,92 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
             </section>
             <section className="result-section" aria-labelledby="impact-result-title">
               <h3 id="impact-result-title">Impact</h3>
-              <dl className="details-grid result-grid"><ImpactFields result={resultState.result} /></dl>
+              <dl className="details-grid result-grid"><ImpactFields impact={resultState.result.impact} /></dl>
             </section>
             <section className="result-section" aria-labelledby="prediction-result-title">
               <h3 id="prediction-result-title">Predicted resource demand</h3>
-              <dl className="details-grid result-grid">
-                <div><dt>Baseline request rate</dt><dd>{resultState.result.prediction.original_request_rate}</dd></div>
-                <div><dt>Simulated request rate</dt><dd>{resultState.result.prediction.simulated_request_rate ?? 'Not available'}</dd></div>
-                <div><dt>Workload multiplier</dt><dd>{resultState.result.prediction.workload_multiplier ?? 'Not available'}</dd></div>
-                <div><dt>Projected CPU demand</dt><dd>{resultState.result.prediction.projected_cpu_demand ?? 'Not available'}</dd></div>
-                <div><dt>Projected memory demand</dt><dd>{resultState.result.prediction.projected_memory_demand ?? 'Not available'}</dd></div>
-                <div><dt>CPU capacity</dt><dd>{resultState.result.prediction.cpu_capacity}</dd></div>
-                <div><dt>Memory capacity</dt><dd>{resultState.result.prediction.memory_capacity}</dd></div>
-                <div><dt>CPU status</dt><dd>{resultState.result.prediction.cpu_status}</dd></div>
-                <div><dt>Memory status</dt><dd>{resultState.result.prediction.memory_status}</dd></div>
-              </dl>
+              <PredictionFields prediction={resultState.result.prediction} />
             </section>
             <section className="result-section" aria-labelledby="bottleneck-result-title">
               <h3 id="bottleneck-result-title">Bottleneck</h3>
-              <dl className="details-grid result-grid">
-                <div><dt>Overall status</dt><dd>{resultState.result.bottleneck.overall_status}</dd></div>
-                <div><dt>CPU status</dt><dd>{resultState.result.bottleneck.cpu_status}</dd></div>
-                <div><dt>Memory status</dt><dd>{resultState.result.bottleneck.memory_status}</dd></div>
-                <div><dt>CPU utilization</dt><dd>{resultState.result.bottleneck.cpu_utilization ?? 'Not available'}</dd></div>
-                <div><dt>Memory utilization</dt><dd>{resultState.result.bottleneck.memory_utilization ?? 'Not available'}</dd></div>
-                <div><dt>Healthy instances</dt><dd>{resultState.result.bottleneck.healthy_instance_count}</dd></div>
-                <div><dt>Unhealthy instances</dt><dd>{resultState.result.bottleneck.unhealthy_instance_count}</dd></div>
-                <div><dt>Reasons</dt><dd>{resultState.result.bottleneck.reasons.join('; ')}</dd></div>
-              </dl>
+              <BottleneckFields bottleneck={resultState.result.bottleneck} />
+            </section>
+          </div>
+        </section>
+      )}
+      {!state.isLoading && state.experiment && impactState.isLoading && (
+        <section className="panel details-state impact-state" aria-live="polite">
+          Loading deployment impact...
+        </section>
+      )}
+      {!state.isLoading && state.experiment && !impactState.isLoading && impactState.isNotFound && (
+        <section className="panel details-state impact-state" aria-live="polite">
+          <h2 className="panel-title">Deployment impact not yet available</h2>
+          <p className="placeholder-copy">{impactState.errorMessage}</p>
+        </section>
+      )}
+      {!state.isLoading && state.experiment && !impactState.isLoading && !impactState.isNotFound && impactState.errorMessage && (
+        <section className="panel details-state impact-state" aria-live="polite">
+          <h2 className="panel-title">Unable to load deployment impact</h2>
+          <p className="placeholder-copy">{impactState.errorMessage}</p>
+        </section>
+      )}
+      {!state.isLoading && state.experiment && impactState.report && (
+        <section className="panel execution-panel impact-panel" aria-labelledby="deployment-impact-title">
+          <div className="panel-heading">
+            <h2 className="panel-title" id="deployment-impact-title">Deployment Impact</h2>
+            <span className={`status-badge severity-${impactState.report.overall_severity.toLowerCase()}`}>
+              {impactState.report.overall_severity}
+            </span>
+          </div>
+          <dl className="details-grid result-grid">
+            <div><dt>Experiment ID</dt><dd>{impactState.report.experiment_id}</dd></div>
+            <div><dt>Scenario type</dt><dd>{impactState.report.scenario_type}</dd></div>
+            <div><dt>Service name</dt><dd>{impactState.report.service_name}</dd></div>
+            <div><dt>Overall severity</dt><dd>{impactState.report.overall_severity}</dd></div>
+          </dl>
+          <div className="result-sections">
+            <section className="result-section" aria-labelledby="impact-simulated-title">
+              <h3 id="impact-simulated-title">Simulated impact</h3>
+              <dl className="details-grid result-grid"><ImpactFields impact={impactState.report.simulated_impact} /></dl>
+            </section>
+            <section className="result-section" aria-labelledby="impact-predicted-title">
+              <h3 id="impact-predicted-title">Predicted demand</h3>
+              <PredictionFields prediction={impactState.report.predicted_demand} />
+            </section>
+            <section className="result-section" aria-labelledby="impact-bottleneck-title">
+              <h3 id="impact-bottleneck-title">Bottleneck</h3>
+              <BottleneckFields bottleneck={impactState.report.bottleneck} />
+            </section>
+            <section className="result-section" aria-labelledby="impact-actual-title">
+              <h3 id="impact-actual-title">Actual result</h3>
+              {impactState.report.actual_result
+                ? <ActualResultFields actualResult={impactState.report.actual_result} />
+                : <p className="result-note">Not available before validation.</p>}
+            </section>
+            <section className="result-section" aria-labelledby="impact-accuracy-title">
+              <h3 id="impact-accuracy-title">Prediction accuracy</h3>
+              {impactState.report.prediction_accuracy
+                ? <>
+                  <p className="result-note">Overall status: {impactState.report.prediction_accuracy.overall_status}</p>
+                  <ul className="result-list">
+                    {impactState.report.prediction_accuracy.comparisons.map((comparison) => (
+                      <li key={comparison.metric_name}>
+                        <strong>{comparison.metric_name}</strong>: {comparison.status}
+                        {' '}(expected {String(comparison.expected)}, actual {String(comparison.actual)})
+                      </li>
+                    ))}
+                  </ul>
+                </>
+                : <p className="result-note">Not available before validation.</p>}
+            </section>
+            <section className="result-section" aria-labelledby="impact-limitations-title">
+              <h3 id="impact-limitations-title">Limitations</h3>
+              {impactState.report.limitations.length > 0
+                ? <ul className="result-list">
+                  {impactState.report.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
+                </ul>
+                : <p className="result-note">None reported.</p>}
             </section>
           </div>
         </section>

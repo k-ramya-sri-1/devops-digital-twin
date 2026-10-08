@@ -59,11 +59,19 @@
 .details-grid dd { margin: 8px 0 0; color: #17212b; font-size: 14px; font-weight: 600; }
 .execution-panel { max-width: 980px; margin-top: 20px; }
 .result-state { margin-top: 20px; }
+.impact-state { margin-top: 20px; }
+.impact-panel { border-top: 3px solid #0d8b83; }
+.severity-high { background: #f8e6e1; color: #a54c3f; }
+.severity-medium { background: #fff1dc; color: #9a641d; }
+.severity-low { background: #e5f2e9; color: #37734d; }
+.severity-insufficient_data { background: #eef2f3; color: #66757c; }
 .result-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .result-sections { border-top: 1px solid #dce4e8; }
 .result-section { padding: 22px; border-bottom: 1px solid #dce4e8; }
 .result-section:last-child { border-bottom: 0; }
 .result-section h3 { margin: 0 0 4px; color: #17212b; font-size: 13px; }
 .result-section .details-grid > div { padding: 16px 12px 12px 0; }
+.result-note { margin: 12px 0 0; color: #6d7a85; font-size: 12px; }
+.result-list { margin: 12px 0 0; padding-left: 18px; color: #6d7a85; font-size: 12px; line-height: 1.7; }
 @media (max-width: 900px) { .sidebar { flex-basis: 210px; } .main-inner { padding: 34px 28px 44px; } .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .content-grid { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .app-shell { display: block; } .sidebar { padding: 16px; } .brand { padding: 0 8px 16px; } .nav-label, .sidebar-footer { display: none; } .nav-list { display: flex; gap: 6px; overflow-x: auto; } .nav-item { flex: 0 0 auto; min-height: 38px; padding: 0 10px; font-size: 12px; } .main-inner { padding: 28px 16px 36px; } .page-header { display: block; margin-bottom: 26px; } .connection-state { display: inline-flex; margin-top: 20px; } .summary-grid { gap: 10px; } .summary-card { min-height: 120px; padding: 15px; } .summary-value { margin-top: 16px; font-size: 28px; } .summary-accent { margin-top: 13px; } .experiment-table th, .experiment-table td { padding-right: 12px; padding-left: 12px; } .experiment-table th:nth-child(3), .experiment-table td:nth-child(3) { display: none; } .details-grid, .result-grid { grid-template-columns: 1fr; } }
