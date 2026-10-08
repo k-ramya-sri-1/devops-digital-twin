@@ -74,8 +74,8 @@ export function Dashboard() {
               {!isLoading && !errorMessage && experiments.length === 0 && <tr><td colSpan={4}>No experiments found.</td></tr>}
               {!isLoading && !errorMessage && experiments.map((experiment) => (
                 <tr key={experiment.experiment_id}>
-                  <td>{experiment.experiment_id}</td>
-                  <td className="experiment-name">{experiment.name}</td>
+                  <td><a className="experiment-link" href={`#experiment/${encodeURIComponent(experiment.experiment_id)}`}>{experiment.experiment_id}</a></td>
+                  <td className="experiment-name"><a className="experiment-link" href={`#experiment/${encodeURIComponent(experiment.experiment_id)}`}>{experiment.name}</a></td>
                   <td className="scenario-name">{experiment.scenario_type}</td>
                   <td><span className={`status-badge ${experiment.status.toLowerCase()}`}>{experiment.status}</span></td>
                 </tr>
