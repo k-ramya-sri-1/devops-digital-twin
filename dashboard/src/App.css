@@ -57,6 +57,20 @@
 .details-grid > div { padding: 20px 22px; border-top: 1px solid #edf1f3; }
 .details-grid dt { color: #8a979e; font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .details-grid dd { margin: 8px 0 0; color: #17212b; font-size: 14px; font-weight: 600; }
+.action-panel { max-width: 980px; margin-top: 20px; }
+.action-content { display: flex; align-items: flex-end; gap: 20px; padding: 22px; flex-wrap: wrap; }
+.service-field { display: grid; gap: 6px; min-width: min(100%, 280px); color: #6d7a85; font-size: 11px; font-weight: 700; }
+.service-field input { min-height: 38px; padding: 0 10px; border: 1px solid #dce4e8; border-radius: 5px; color: #17212b; font: inherit; font-size: 13px; font-weight: 500; }
+.service-field input:focus { outline: 2px solid rgba(13, 139, 131, .25); border-color: #0d8b83; }
+.service-field small { color: #8a979e; font-size: 10px; font-weight: 500; }
+.action-buttons { display: flex; gap: 10px; }
+.action-button { min-height: 38px; padding: 0 16px; border: 1px solid transparent; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 800; }
+.primary-action { background: #0d8b83; color: #fff; }
+.secondary-action { border-color: #3372a8; background: #fff; color: #3372a8; }
+.action-button:disabled { cursor: not-allowed; opacity: .45; }
+.action-message { flex-basis: 100%; margin: 0; font-size: 12px; line-height: 1.5; }
+.success-message { color: #37734d; }
+.error-message { color: #a54c3f; }
 .execution-panel { max-width: 980px; margin-top: 20px; }
 .result-state { margin-top: 20px; }
 .impact-state { margin-top: 20px; }

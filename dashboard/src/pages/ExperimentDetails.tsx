@@ -1,6 +1,14 @@
 import { useEffect, useState } from 'react'
 
-import { ApiError, getDeploymentImpact, getExperiment, getExecutionResult, getRecommendations } from '../api/client'
+import {
+  ApiError,
+  executeExperiment,
+  getDeploymentImpact,
+  getExperiment,
+  getExecutionResult,
+  getRecommendations,
+  validateExperiment,
+} from '../api/client'
 import type {
   ActualKubernetesResult,
   BottleneckResult,
@@ -40,6 +48,14 @@ type RecommendationLoadState = {
   isLoading: boolean
   errorMessage: string | null
   isNotFound: boolean
+}
+
+type ActionType = 'execute' | 'validate'
+
+type ActionState = {
+  active: ActionType | null
+  message: string | null
+  errorMessage: string | null
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
@@ -176,6 +192,46 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
     errorMessage: null,
     isNotFound: false,
   })
+  const [serviceName, setServiceName] = useState('devops-digital-twin')
+  const [refreshKey, setRefreshKey] = useState(0)
+  const [actionState, setActionState] = useState<ActionState>({
+    active: null,
+    message: null,
+    errorMessage: null,
+  })
+
+  const loadedExperimentId = state.experiment?.experiment_id
+
+  const handleExecute = async () => {
+    if (!state.experiment || state.experiment.status !== 'CREATED' || actionState.active) return
+    const selectedServiceName = serviceName.trim()
+    if (!selectedServiceName) {
+      setActionState({ active: null, message: null, errorMessage: 'Service name is required to execute an experiment.' })
+      return
+    }
+
+    setActionState({ active: 'execute', message: null, errorMessage: null })
+    try {
+      await executeExperiment(experimentId, { service_name: selectedServiceName })
+      setActionState({ active: null, message: 'Experiment execution completed.', errorMessage: null })
+      setRefreshKey((currentKey) => currentKey + 1)
+    } catch (error: unknown) {
+      setActionState({ active: null, message: null, errorMessage: getErrorMessage(error, 'Unable to execute the experiment.') })
+    }
+  }
+
+  const handleValidate = async () => {
+    if (!state.experiment || state.experiment.status !== 'EXECUTED' || actionState.active) return
+
+    setActionState({ active: 'validate', message: null, errorMessage: null })
+    try {
+      await validateExperiment(experimentId)
+      setActionState({ active: null, message: 'Experiment validation completed.', errorMessage: null })
+      setRefreshKey((currentKey) => currentKey + 1)
+    } catch (error: unknown) {
+      setActionState({ active: null, message: null, errorMessage: getErrorMessage(error, 'Unable to validate the experiment.') })
+    }
+  }
 
   useEffect(() => {
     let isMounted = true
@@ -195,10 +251,10 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
     return () => {
       isMounted = false
     }
-  }, [experimentId])
+  }, [experimentId, refreshKey])
 
   useEffect(() => {
-    if (!state.experiment) return
+    if (!loadedExperimentId) return
 
     let isMounted = true
 
@@ -217,10 +273,10 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
     return () => {
       isMounted = false
     }
-  }, [experimentId, state.experiment])
+  }, [experimentId, loadedExperimentId, refreshKey])
 
   useEffect(() => {
-    if (!state.experiment) return
+    if (!loadedExperimentId) return
 
     let isMounted = true
 
@@ -239,10 +295,10 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
     return () => {
       isMounted = false
     }
-  }, [experimentId, state.experiment])
+  }, [experimentId, loadedExperimentId, refreshKey])
 
   useEffect(() => {
-    if (!state.experiment) return
+    if (!loadedExperimentId) return
 
     let isMounted = true
 
@@ -261,7 +317,7 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
     return () => {
       isMounted = false
     }
-  }, [experimentId, state.experiment])
+  }, [experimentId, loadedExperimentId, refreshKey])
 
   return (
     <div className="main-inner" id="experiment-details">
@@ -301,6 +357,46 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
             <div><dt>Instance name</dt><dd>{state.experiment.scenario_parameters.instance_name ?? 'Not provided'}</dd></div>
             <div><dt>Additional instances</dt><dd>{state.experiment.scenario_parameters.additional_instances ?? 'Not provided'}</dd></div>
           </dl>
+        </section>
+      )}
+      {!state.isLoading && state.experiment && (
+        <section className="panel action-panel" aria-labelledby="experiment-actions-title">
+          <div className="panel-heading">
+            <h2 className="panel-title" id="experiment-actions-title">Experiment Actions</h2>
+            <p className="panel-note">Backend controlled</p>
+          </div>
+          <div className="action-content">
+            <label className="service-field">
+              <span>Service name</span>
+              <input
+                value={serviceName}
+                onChange={(event) => setServiceName(event.target.value)}
+                disabled={actionState.active !== null}
+                aria-describedby="service-name-help"
+              />
+              <small id="service-name-help">Required for execution.</small>
+            </label>
+            <div className="action-buttons">
+              <button
+                className="action-button primary-action"
+                type="button"
+                onClick={handleExecute}
+                disabled={state.experiment.status !== 'CREATED' || actionState.active !== null}
+              >
+                {actionState.active === 'execute' ? 'Executing...' : 'Execute'}
+              </button>
+              <button
+                className="action-button secondary-action"
+                type="button"
+                onClick={handleValidate}
+                disabled={state.experiment.status !== 'EXECUTED' || actionState.active !== null}
+              >
+                {actionState.active === 'validate' ? 'Validating...' : 'Validate'}
+              </button>
+            </div>
+            {actionState.message && <p className="action-message success-message" role="status">{actionState.message}</p>}
+            {actionState.errorMessage && <p className="action-message error-message" role="alert">{actionState.errorMessage}</p>}
+          </div>
         </section>
       )}
       {!state.isLoading && state.experiment && resultState.isLoading && (
