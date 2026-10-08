@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 
-import { ApiError, getDeploymentImpact, getExperiment, getExecutionResult } from '../api/client'
+import { ApiError, getDeploymentImpact, getExperiment, getExecutionResult, getRecommendations } from '../api/client'
 import type {
   ActualKubernetesResult,
   BottleneckResult,
@@ -8,6 +8,7 @@ import type {
   ExecutionResult,
   Experiment,
   ImpactResult,
+  RecommendationReport,
   ResourcePredictionResult,
 } from '../types/experiment'
 
@@ -29,6 +30,13 @@ type ResultLoadState = {
 
 type ImpactLoadState = {
   report: DeploymentImpactReport | null
+  isLoading: boolean
+  errorMessage: string | null
+  isNotFound: boolean
+}
+
+type RecommendationLoadState = {
+  report: RecommendationReport | null
   isLoading: boolean
   errorMessage: string | null
   isNotFound: boolean
@@ -162,6 +170,12 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
     errorMessage: null,
     isNotFound: false,
   })
+  const [recommendationState, setRecommendationState] = useState<RecommendationLoadState>({
+    report: null,
+    isLoading: true,
+    errorMessage: null,
+    isNotFound: false,
+  })
 
   useEffect(() => {
     let isMounted = true
@@ -198,6 +212,28 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
         const isNotFound = error instanceof ApiError && error.status === 404
         const errorMessage = getErrorMessage(error, 'Unable to load the execution result.')
         setResultState({ result: null, isLoading: false, errorMessage, isNotFound })
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [experimentId, state.experiment])
+
+  useEffect(() => {
+    if (!state.experiment) return
+
+    let isMounted = true
+
+    getRecommendations(experimentId)
+      .then((report) => {
+        if (!isMounted) return
+        setRecommendationState({ report, isLoading: false, errorMessage: null, isNotFound: false })
+      })
+      .catch((error: unknown) => {
+        if (!isMounted) return
+        const isNotFound = error instanceof ApiError && (error.status === 404 || error.status === 409)
+        const errorMessage = getErrorMessage(error, 'Unable to load recommendations.')
+        setRecommendationState({ report: null, isLoading: false, errorMessage, isNotFound })
       })
 
     return () => {
@@ -390,6 +426,58 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
                 : <p className="result-note">None reported.</p>}
             </section>
           </div>
+        </section>
+      )}
+      {!state.isLoading && state.experiment && recommendationState.isLoading && (
+        <section className="panel details-state recommendation-state" aria-live="polite">
+          Loading recommendations...
+        </section>
+      )}
+      {!state.isLoading && state.experiment && !recommendationState.isLoading && recommendationState.isNotFound && (
+        <section className="panel details-state recommendation-state" aria-live="polite">
+          <h2 className="panel-title">Recommendations not yet available</h2>
+          <p className="placeholder-copy">{recommendationState.errorMessage}</p>
+        </section>
+      )}
+      {!state.isLoading && state.experiment && !recommendationState.isLoading && !recommendationState.isNotFound && recommendationState.errorMessage && (
+        <section className="panel details-state recommendation-state" aria-live="polite">
+          <h2 className="panel-title">Unable to load recommendations</h2>
+          <p className="placeholder-copy">{recommendationState.errorMessage}</p>
+        </section>
+      )}
+      {!state.isLoading && state.experiment && recommendationState.report && (
+        <section className="panel execution-panel recommendation-panel" aria-labelledby="recommendations-title">
+          <div className="panel-heading">
+            <h2 className="panel-title" id="recommendations-title">Recommendations</h2>
+            <span className="panel-note">{recommendationState.report.overall_priority}</span>
+          </div>
+          {recommendationState.report.recommendations.length === 0
+            ? <p className="result-note recommendation-empty">No recommendations reported.</p>
+            : <div className="recommendation-list">
+              {recommendationState.report.recommendations.map((recommendation) => (
+                <article className="recommendation-item" key={`${recommendation.action}-${recommendation.priority}-${recommendation.reason}`}>
+                  <div className="recommendation-heading">
+                    <h3>{recommendation.action}</h3>
+                    <span className={`status-badge priority-${recommendation.priority.toLowerCase()}`}>
+                      {recommendation.priority}
+                    </span>
+                  </div>
+                  <p className="recommendation-reason">{recommendation.reason}</p>
+                  <dl className="recommendation-meta">
+                    <div><dt>Experiment ID</dt><dd>{recommendation.experiment_id}</dd></div>
+                    <div><dt>Evidence</dt><dd>{recommendation.evidence.join('; ')}</dd></div>
+                  </dl>
+                </article>
+              ))}
+            </div>}
+          {recommendationState.report.limitations.length > 0 && (
+            <div className="recommendation-limitations">
+              <h3>Limitations</h3>
+              <ul className="result-list">
+                {recommendationState.report.limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
+              </ul>
+            </div>
+          )}
         </section>
       )}
     </div>
