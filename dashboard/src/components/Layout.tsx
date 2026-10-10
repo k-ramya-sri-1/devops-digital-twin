@@ -3,13 +3,22 @@ import type { ReactNode } from 'react'
 type LayoutProps = { children: ReactNode }
 
 const navigation = [
-  { label: 'Dashboard', mark: '01', active: true },
-  { label: 'Experiments', mark: '02', active: false },
-  { label: 'Infrastructure', mark: '03', active: false },
-  { label: 'Results', mark: '04', active: false },
+  { label: 'Dashboard', mark: '01', route: '#dashboard' },
+  { label: 'Experiments', mark: '02', route: '#experiments' },
+  { label: 'Infrastructure', mark: '03', route: '#infrastructure' },
+  { label: 'Results', mark: '04', route: '#results' },
 ]
 
-export function Layout({ children }: LayoutProps) {
+type LayoutPropsWithRoute = LayoutProps & { currentHash: string }
+
+export function Layout({ children, currentHash }: LayoutPropsWithRoute) {
+  const workspaceRoutes = navigation.map((item) => item.route)
+  const activeHash = workspaceRoutes.includes(currentHash)
+    ? currentHash
+    : currentHash.startsWith('#experiment/')
+      ? null
+      : '#dashboard'
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -26,9 +35,9 @@ export function Layout({ children }: LayoutProps) {
             {navigation.map((item) => (
               <li key={item.label}>
                 <a
-                  className={`nav-item${item.active ? ' active' : ''}`}
-                  href={item.active ? '#dashboard' : `#${item.label.toLowerCase()}`}
-                  aria-current={item.active ? 'page' : undefined}
+                  className={`nav-item${activeHash === item.route ? ' active' : ''}`}
+                  href={item.route}
+                  aria-current={activeHash === item.route ? 'page' : undefined}
                 >
                   <span className="nav-mark" aria-hidden="true">{item.mark}</span>
                   {item.label}

@@ -3,6 +3,8 @@ import { useEffect, useState } from 'react'
 import { Layout } from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
 import { ExperimentDetails } from './pages/ExperimentDetails'
+import { Experiments } from './pages/Experiments'
+import { PlaceholderPage } from './pages/PlaceholderPage'
 import './App.css'
 
 function App() {
@@ -19,9 +21,19 @@ function App() {
     ? decodeURIComponent(hash.slice(experimentPrefix.length))
     : null
 
+  const page = experimentId
+    ? <ExperimentDetails key={experimentId} experimentId={experimentId} />
+    : hash === '#experiments'
+      ? <Experiments />
+      : hash === '#infrastructure'
+        ? <PlaceholderPage title="Infrastructure" />
+        : hash === '#results'
+          ? <PlaceholderPage title="Results" />
+          : <Dashboard />
+
   return (
-    <Layout>
-      {experimentId ? <ExperimentDetails key={experimentId} experimentId={experimentId} /> : <Dashboard />}
+    <Layout currentHash={hash}>
+      {page}
     </Layout>
   )
 }

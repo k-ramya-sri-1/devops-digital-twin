@@ -25,6 +25,7 @@ export type Experiment = {
   scenario_type: ScenarioType
   status: ExperimentStatus
   scenario_parameters: ScenarioParameters
+  created_at?: string | null
 }
 
 export type ExperimentCreateRequest = {

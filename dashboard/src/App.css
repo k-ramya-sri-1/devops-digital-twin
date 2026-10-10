@@ -38,6 +38,12 @@
 .experiment-name { color: #17212b !important; font-weight: 600; }
 .experiment-link { color: inherit; text-decoration: none; }
 .experiment-link:hover, .experiment-link:focus-visible { color: #0d8b83; text-decoration: underline; }
+.experiments-panel { max-width: 1180px; }
+.experiments-table-wrap { overflow-x: auto; }
+.empty-state { padding: 28px 22px; color: #6d7a85; font-size: 13px; }
+.placeholder-panel { max-width: 680px; }
+.placeholder-panel .panel-body { padding: 24px 22px; }
+.placeholder-panel .placeholder-copy { margin: 0; }
 .scenario-name { font-family: Consolas, monospace; font-size: 11px !important; }
 .status-badge { display: inline-flex; padding: 5px 8px; border-radius: 4px; background: #eef2f3; color: #66757c; font-size: 10px; font-weight: 800; letter-spacing: .06em; }
 .status-badge.executed { background: #e5f2e9; color: #37734d; }
