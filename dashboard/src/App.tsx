@@ -8,6 +8,17 @@ import { Infrastructure } from './pages/Infrastructure'
 import { Results } from './pages/Results'
 import './App.css'
 
+function getExperimentId(hash: string): string | null {
+  const experimentPrefix = '#experiment/'
+  if (!hash.startsWith(experimentPrefix)) return null
+
+  try {
+    return decodeURIComponent(hash.slice(experimentPrefix.length))
+  } catch {
+    return null
+  }
+}
+
 function App() {
   const [hash, setHash] = useState(() => window.location.hash)
 
@@ -17,10 +28,7 @@ function App() {
     return () => window.removeEventListener('hashchange', handleHashChange)
   }, [])
 
-  const experimentPrefix = '#experiment/'
-  const experimentId = hash.startsWith(experimentPrefix)
-    ? decodeURIComponent(hash.slice(experimentPrefix.length))
-    : null
+  const experimentId = getExperimentId(hash)
 
   const page = experimentId
     ? <ExperimentDetails key={experimentId} experimentId={experimentId} />

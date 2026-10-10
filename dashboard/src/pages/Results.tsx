@@ -44,7 +44,10 @@ async function loadExperimentResult(experiment: Experiment): Promise<ExperimentR
   const impact = impactResponse.status === 'fulfilled' ? impactResponse.value : null
   const errors = [executionResponse, impactResponse]
     .filter((response): response is PromiseRejectedResult => response.status === 'rejected')
-    .filter((response) => !(response.reason instanceof ApiError && response.reason.status === 404))
+    .filter((response) => !(
+      response.reason instanceof ApiError
+      && (response.reason.status === 404 || response.reason.status === 409)
+    ))
     .map((response) => getErrorMessage(response.reason))
 
   return {
