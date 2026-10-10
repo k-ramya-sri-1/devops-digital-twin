@@ -202,6 +202,34 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
 
   const loadedExperimentId = state.experiment?.experiment_id
 
+  const refreshAfterAction = () => {
+    setState((currentState) => ({
+      ...currentState,
+      isLoading: true,
+      errorMessage: null,
+      isNotFound: false,
+    }))
+    setResultState((currentState) => ({
+      ...currentState,
+      isLoading: true,
+      errorMessage: null,
+      isNotFound: false,
+    }))
+    setImpactState((currentState) => ({
+      ...currentState,
+      isLoading: true,
+      errorMessage: null,
+      isNotFound: false,
+    }))
+    setRecommendationState((currentState) => ({
+      ...currentState,
+      isLoading: true,
+      errorMessage: null,
+      isNotFound: false,
+    }))
+    setRefreshKey((currentKey) => currentKey + 1)
+  }
+
   const handleExecute = async () => {
     if (!state.experiment || state.experiment.status !== 'CREATED' || actionState.active) return
     const selectedServiceName = serviceName.trim()
@@ -214,7 +242,7 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
     try {
       await executeExperiment(experimentId, { service_name: selectedServiceName })
       setActionState({ active: null, message: 'Experiment execution completed.', errorMessage: null })
-      setRefreshKey((currentKey) => currentKey + 1)
+      refreshAfterAction()
     } catch (error: unknown) {
       setActionState({ active: null, message: null, errorMessage: getErrorMessage(error, 'Unable to execute the experiment.') })
     }
@@ -227,7 +255,7 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
     try {
       await validateExperiment(experimentId)
       setActionState({ active: null, message: 'Experiment validation completed.', errorMessage: null })
-      setRefreshKey((currentKey) => currentKey + 1)
+      refreshAfterAction()
     } catch (error: unknown) {
       setActionState({ active: null, message: null, errorMessage: getErrorMessage(error, 'Unable to validate the experiment.') })
     }
@@ -363,7 +391,7 @@ export function ExperimentDetails({ experimentId }: ExperimentDetailsProps) {
         <section className="panel action-panel" aria-labelledby="experiment-actions-title">
           <div className="panel-heading">
             <h2 className="panel-title" id="experiment-actions-title">Experiment Actions</h2>
-            <p className="panel-note">Backend controlled</p>
+            <p className="panel-note">Current status: <strong>{state.experiment.status}</strong></p>
           </div>
           <div className="action-content">
             <label className="service-field">

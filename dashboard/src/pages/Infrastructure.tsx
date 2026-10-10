@@ -15,7 +15,7 @@ export function Infrastructure() {
         </div>
         <div className="panel-body">
           <p className="placeholder-copy">
-            Infrastructure telemetry is not available through the current API. There is no read-only endpoint for current Kubernetes deployment state, so deployment name, namespace, replica counts, CPU, memory, and health cannot be shown here.
+            Infrastructure telemetry is not available through the current API. The backend exposes application health and Prometheus-formatted application metrics, but no read-only monitoring status or current Kubernetes deployment endpoint. Deployment name, namespace, replica counts, CPU, memory, and health therefore cannot be shown here.
           </p>
         </div>
       </section>
