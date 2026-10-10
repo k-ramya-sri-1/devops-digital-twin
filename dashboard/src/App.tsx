@@ -4,7 +4,8 @@ import { Layout } from './components/Layout'
 import { Dashboard } from './pages/Dashboard'
 import { ExperimentDetails } from './pages/ExperimentDetails'
 import { Experiments } from './pages/Experiments'
-import { PlaceholderPage } from './pages/PlaceholderPage'
+import { Infrastructure } from './pages/Infrastructure'
+import { Results } from './pages/Results'
 import './App.css'
 
 function App() {
@@ -26,9 +27,9 @@ function App() {
     : hash === '#experiments'
       ? <Experiments />
       : hash === '#infrastructure'
-        ? <PlaceholderPage title="Infrastructure" />
+        ? <Infrastructure />
         : hash === '#results'
-          ? <PlaceholderPage title="Results" />
+          ? <Results />
           : <Dashboard />
 
   return (

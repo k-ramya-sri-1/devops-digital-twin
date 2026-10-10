@@ -38,6 +38,22 @@
 .experiment-name { color: #17212b !important; font-weight: 600; }
 .experiment-link { color: inherit; text-decoration: none; }
 .experiment-link:hover, .experiment-link:focus-visible { color: #0d8b83; text-decoration: underline; }
+.results-panel { max-width: 1180px; }
+.results-list { display: grid; gap: 1px; background: #dce4e8; }
+.result-card { padding: 22px; background: #fff; }
+.result-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; }
+.result-card-heading h3 { margin: 0; color: #17212b; font-size: 15px; }
+.result-card-meta { display: flex; gap: 14px; margin: 8px 0 0; color: #6d7a85; font-family: Consolas, monospace; font-size: 11px; }
+.result-summary { margin-top: 18px; }
+.result-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 0; }
+.result-summary-grid > div { padding: 12px; border: 1px solid #edf1f3; border-radius: 5px; background: #fbfcfc; }
+.result-summary-grid dt, .comparison-list dt { color: #8a979e; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.result-summary-grid dd { margin: 6px 0 0; color: #17212b; font-size: 12px; font-weight: 600; }
+.comparison-summary { margin-top: 16px; padding-top: 16px; border-top: 1px solid #edf1f3; }
+.comparison-summary .result-note { margin: 0; }
+.comparison-list { display: grid; gap: 10px; margin: 12px 0 0; }
+.comparison-list > div { display: grid; grid-template-columns: minmax(140px, .3fr) minmax(0, 1fr); gap: 12px; }
+.comparison-list dd { margin: 0; color: #6d7a85; font-family: Consolas, monospace; font-size: 11px; overflow-wrap: anywhere; }
 .experiments-panel { max-width: 1180px; }
 .experiments-table-wrap { overflow-x: auto; }
 .empty-state { padding: 28px 22px; color: #6d7a85; font-size: 13px; }
@@ -111,3 +127,4 @@
 .recommendation-empty { margin: 22px; }
 @media (max-width: 900px) { .sidebar { flex-basis: 210px; } .main-inner { padding: 34px 28px 44px; } .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .content-grid { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .app-shell { display: block; } .sidebar { padding: 16px; } .brand { padding: 0 8px 16px; } .nav-label, .sidebar-footer { display: none; } .nav-list { display: flex; gap: 6px; overflow-x: auto; } .nav-item { flex: 0 0 auto; min-height: 38px; padding: 0 10px; font-size: 12px; } .main-inner { padding: 28px 16px 36px; } .page-header { display: block; margin-bottom: 26px; } .connection-state { display: inline-flex; margin-top: 20px; } .summary-grid { gap: 10px; } .summary-card { min-height: 120px; padding: 15px; } .summary-value { margin-top: 16px; font-size: 28px; } .summary-accent { margin-top: 13px; } .experiment-table th, .experiment-table td { padding-right: 12px; padding-left: 12px; } .experiment-table th:nth-child(3), .experiment-table td:nth-child(3) { display: none; } .details-grid, .result-grid { grid-template-columns: 1fr; } .recommendation-heading, .recommendation-meta { display: block; } .recommendation-heading .status-badge { margin-top: 10px; } .recommendation-meta > div + div { margin-top: 12px; } }
+@media (max-width: 640px) { .result-card-heading { display: block; } .result-card-heading .status-badge { display: inline-flex; margin-top: 12px; } .result-summary-grid { grid-template-columns: 1fr; } .comparison-list > div { display: block; } .comparison-list dd { margin-top: 5px; } }
