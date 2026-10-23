@@ -1,5 +1,7 @@
 import type {
   ActualKubernetesResult,
+  InfrastructureMetrics,
+  DeploymentStatus,
   DeploymentImpactReport,
   ExecuteExperimentRequest,
   ExecutionResult,
@@ -55,6 +57,14 @@ function postJson<T>(path: string, body: unknown): Promise<T> {
 
 export function getExperiments(): Promise<Experiment[]> {
   return request<Experiment[]>('/experiments')
+}
+
+export function getDeploymentStatus(): Promise<DeploymentStatus> {
+  return request<DeploymentStatus>('/infrastructure/status')
+}
+
+export function getInfrastructureMetrics(): Promise<InfrastructureMetrics> {
+  return request<InfrastructureMetrics>('/infrastructure/metrics')
 }
 
 export function getExperiment(experimentId: string): Promise<Experiment> {

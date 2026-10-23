@@ -10,6 +10,7 @@ Infrastructure = models.Infrastructure
 InstanceStatus = models.InstanceStatus
 PrometheusCollector = collector_module.PrometheusCollector
 PrometheusCollectorError = collector_module.PrometheusCollectorError
+KubernetesContainerMetrics = collector_module.KubernetesContainerMetrics
 
 
 def response_for(payload: object, status_code: int = 200) -> httpx.Response:
@@ -30,6 +31,24 @@ def successful_payload(
                     "metric": labels or {},
                     "value": ["1710000000", value],
                 }
+            ],
+        },
+    }
+
+
+def successful_samples_payload(
+    samples: list[tuple[str, dict[str, str]]],
+) -> dict[str, object]:
+    return {
+        "status": "success",
+        "data": {
+            "resultType": "vector",
+            "result": [
+                {
+                    "metric": labels,
+                    "value": ["1710000000", value],
+                }
+                for value, labels in samples
             ],
         },
     }
@@ -77,6 +96,108 @@ def test_connection_failure() -> None:
 
     with pytest.raises(PrometheusCollectorError, match="could not connect"):
         collector.query("up")
+
+
+def test_query_container_metrics_merges_cpu_and_memory_by_pod() -> None:
+    cpu_query = PrometheusCollector.CONTAINER_CPU_QUERY
+    memory_query = PrometheusCollector.CONTAINER_MEMORY_QUERY
+    payloads = {
+        cpu_query: successful_samples_payload(
+            [
+                ("0.01", {"pod": "devops-digital-twin-a"}),
+                ("0.02", {"pod": "devops-digital-twin-b"}),
+                ("0.03", {"pod": "devops-digital-twin-c"}),
+            ]
+        ),
+        memory_query: successful_samples_payload(
+            [
+                ("100", {"pod": "devops-digital-twin-c"}),
+                ("200", {"pod": "devops-digital-twin-a"}),
+                ("300", {"pod": "devops-digital-twin-b"}),
+            ]
+        ),
+    }
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        return response_for(payloads[request.url.params["query"]])
+
+    metrics = collector_for(respond).query_container_metrics()
+
+    assert metrics == [
+        KubernetesContainerMetrics("devops-digital-twin-a", 0.01, 200.0),
+        KubernetesContainerMetrics("devops-digital-twin-b", 0.02, 300.0),
+        KubernetesContainerMetrics("devops-digital-twin-c", 0.03, 100.0),
+    ]
+
+
+def test_query_container_metrics_returns_empty_for_empty_queries() -> None:
+    payload = {"status": "success", "data": {"resultType": "vector", "result": []}}
+    collector = collector_for(lambda request: response_for(payload))
+
+    assert collector.query_container_metrics() == []
+
+
+@pytest.mark.parametrize(
+    ("cpu_payload", "memory_payload", "expected"),
+    [
+        (
+            successful_samples_payload(
+                [("0.01", {"pod": "devops-digital-twin-a"})]
+            ),
+            successful_samples_payload([]),
+            [KubernetesContainerMetrics("devops-digital-twin-a", 0.01, None)],
+        ),
+        (
+            successful_samples_payload([]),
+            successful_samples_payload(
+                [("100", {"pod": "devops-digital-twin-a"})]
+            ),
+            [KubernetesContainerMetrics("devops-digital-twin-a", None, 100.0)],
+        ),
+    ],
+)
+def test_query_container_metrics_preserves_missing_metric_as_none(
+    cpu_payload: dict[str, object],
+    memory_payload: dict[str, object],
+    expected: list[KubernetesContainerMetrics],
+) -> None:
+    payloads = {
+        PrometheusCollector.CONTAINER_CPU_QUERY: cpu_payload,
+        PrometheusCollector.CONTAINER_MEMORY_QUERY: memory_payload,
+    }
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        return response_for(payloads[request.url.params["query"]])
+
+    assert collector_for(respond).query_container_metrics() == expected
+
+
+def test_query_container_metrics_raises_for_connection_failure() -> None:
+    def fail(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("connection refused", request=request)
+
+    with pytest.raises(PrometheusCollectorError, match="could not connect"):
+        collector_for(fail).query_container_metrics()
+
+
+def test_query_container_metrics_raises_for_api_error() -> None:
+    payload = {
+        "status": "error",
+        "errorType": "bad_data",
+        "error": "invalid query",
+    }
+    collector = collector_for(lambda request: response_for(payload))
+
+    with pytest.raises(PrometheusCollectorError, match="invalid query"):
+        collector.query_container_metrics()
+
+
+def test_query_container_metrics_raises_for_missing_pod_label() -> None:
+    payload = successful_payload("0.01")
+    collector = collector_for(lambda request: response_for(payload))
+
+    with pytest.raises(PrometheusCollectorError, match="pod label"):
+        collector.query_container_metrics()
 
 
 def test_collects_request_latency_and_health_metrics() -> None:

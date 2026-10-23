@@ -34,12 +34,33 @@ class PrometheusSample:
     value: float
 
 
+@dataclass(frozen=True)
+class KubernetesContainerMetrics:
+    """CPU and memory usage reported for one Kubernetes pod."""
+
+    pod_name: str
+    cpu_cores: float | None
+    memory_bytes: float | None
+
+
 class PrometheusCollector:
     """Query Prometheus and map observed application metrics to twin state."""
 
     REQUESTS_QUERY = "http_requests_total"
     LATENCY_COUNT_QUERY = "http_request_duration_seconds_count"
     HEALTH_QUERY = "up"
+    CONTAINER_CPU_QUERY = (
+        'rate(container_cpu_usage_seconds_total{'
+        'container="devops-digital-twin-app",'
+        'namespace="default",'
+        'pod=~"devops-digital-twin-.*"}[5m])'
+    )
+    CONTAINER_MEMORY_QUERY = (
+        'container_memory_working_set_bytes{'
+        'container="devops-digital-twin-app",'
+        'namespace="default",'
+        'pod=~"devops-digital-twin-.*"}'
+    )
     SERVICE_NAME = "devops-digital-twin"
     TARGET_INSTANCE_NAME = "devops-digital-twin-service"
     APPLICATION_JOB = "devops-digital-twin"
@@ -111,6 +132,22 @@ class PrometheusCollector:
                 "Prometheus returned an invalid query result"
             ) from error
 
+    def query_container_metrics(self) -> list[KubernetesContainerMetrics]:
+        """Query and merge current CPU and memory metrics by pod name."""
+        cpu_samples = self.query(self.CONTAINER_CPU_QUERY)
+        memory_samples = self.query(self.CONTAINER_MEMORY_QUERY)
+        cpu_by_pod = self._container_samples_by_pod(cpu_samples)
+        memory_by_pod = self._container_samples_by_pod(memory_samples)
+
+        return [
+            KubernetesContainerMetrics(
+                pod_name=pod_name,
+                cpu_cores=cpu_by_pod.get(pod_name),
+                memory_bytes=memory_by_pod.get(pod_name),
+            )
+            for pod_name in sorted(cpu_by_pod.keys() | memory_by_pod.keys())
+        ]
+
     def collect(self, infrastructure: Infrastructure | None = None) -> Infrastructure:
         """Collect current application metrics into an infrastructure state.
 
@@ -179,6 +216,20 @@ class PrometheusCollector:
     @staticmethod
     def _total(samples: list[PrometheusSample]) -> float:
         return sum(sample.value for sample in samples)
+
+    @staticmethod
+    def _container_samples_by_pod(
+        samples: list[PrometheusSample],
+    ) -> dict[str, float]:
+        by_pod: dict[str, float] = {}
+        for sample in samples:
+            pod_name = sample.labels.get("pod")
+            if not pod_name:
+                raise PrometheusCollectorError(
+                    "Prometheus returned a container metric without a pod label"
+                )
+            by_pod[pod_name] = sample.value
+        return by_pod
 
     @classmethod
     def _health_status(cls, samples: list[PrometheusSample]) -> InstanceStatus:

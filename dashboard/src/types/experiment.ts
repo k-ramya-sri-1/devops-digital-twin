@@ -185,6 +185,27 @@ export type ActualKubernetesResult = {
   updated_replicas: number
 }
 
+export type DeploymentStatus = {
+  deployment_name: string
+  namespace: string
+  desired_replicas: number
+  ready_replicas: number
+  available_replicas: number
+  updated_replicas: number
+}
+
+export type ContainerMetric = {
+  pod_name: string
+  cpu_cores: number | null
+  memory_bytes: number | null
+}
+
+export type InfrastructureMetrics = {
+  deployment_name: string
+  namespace: string
+  pods: ContainerMetric[]
+}
+
 export type PredictionMetricComparison = {
   metric_name: string
   expected: unknown

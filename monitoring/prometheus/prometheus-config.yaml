@@ -21,3 +21,13 @@ data:
         static_configs:
           - targets:
               - devops-digital-twin-service:8000
+
+      - job_name: kubernetes-cadvisor
+        scheme: https
+        metrics_path: /api/v1/nodes/desktop-control-plane/proxy/metrics/cadvisor
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        static_configs:
+          - targets:
+              - kubernetes.default.svc:443

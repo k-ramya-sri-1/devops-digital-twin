@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from database.connection import DatabaseError
 from database.experiment_repository import ExperimentRepository
 from database.experiment_result_repository import ExperimentResultRepository
+from app.src.services.prometheus import get_prometheus_collector
 
 
 experiment_module = importlib.import_module("digital-twin.experiment")
@@ -308,7 +309,6 @@ def get_experiment_result_repository() -> ExperimentResultRepository:
 
 def get_current_state_service() -> CurrentStateService:
     """Provide a current-state service backed by the configured Prometheus URL."""
-    prometheus_url = os.getenv("PROMETHEUS_URL", "http://localhost:9090")
     deployment_name = os.getenv("KUBERNETES_DEPLOYMENT_NAME", "devops-digital-twin")
     namespace = os.getenv("KUBERNETES_NAMESPACE", "default")
     adapter = KubernetesExperimentAdapter(
@@ -316,7 +316,7 @@ def get_current_state_service() -> CurrentStateService:
         namespace=namespace,
     )
     return CurrentStateService(
-        PrometheusCollector(prometheus_url),
+        get_prometheus_collector(),
         replica_count_provider=lambda: adapter.get_deployment_state().desired_replicas,
     )
 
