@@ -16,9 +16,11 @@ class FakeCollector:
         self.state = state
         self.error = error
         self.collect_calls = 0
+        self.resource_limits = None
 
-    def collect(self):
+    def collect(self, resource_limits=None):
         self.collect_calls += 1
+        self.resource_limits = resource_limits
         if self.error is not None:
             raise self.error
         return self.state
@@ -46,6 +48,20 @@ def test_get_current_state_returns_collected_infrastructure() -> None:
 
     assert result is infrastructure
     assert collector.collect_calls == 1
+
+
+def test_resource_limits_provider_is_passed_to_collector() -> None:
+    state = make_state()
+    collector = FakeCollector(state)
+    limits = object()
+
+    result = CurrentStateService(
+        collector, resource_limits_provider=lambda: limits
+    ).get_current_state()
+
+    assert result is state
+    assert collector.collect_calls == 1
+    assert collector.resource_limits is limits
 
 
 def test_collector_errors_propagate() -> None:

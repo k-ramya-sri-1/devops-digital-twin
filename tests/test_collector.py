@@ -11,6 +11,9 @@ InstanceStatus = models.InstanceStatus
 PrometheusCollector = collector_module.PrometheusCollector
 PrometheusCollectorError = collector_module.PrometheusCollectorError
 KubernetesContainerMetrics = collector_module.KubernetesContainerMetrics
+KubernetesContainerResourceLimits = importlib.import_module(
+    "digital-twin.kubernetes_adapter"
+).KubernetesContainerResourceLimits
 
 
 def response_for(payload: object, status_code: int = 200) -> httpx.Response:
@@ -224,6 +227,70 @@ def test_collects_request_latency_and_health_metrics() -> None:
     assert instance.status is InstanceStatus.HEALTHY
     assert instance.cpu_capacity == 0.0
     assert instance.memory_capacity == 0.0
+
+
+def test_collect_aggregates_container_usage_against_live_limits() -> None:
+    payloads = {
+        "http_requests_total": successful_payload("333", {"job": "devops-digital-twin"}),
+        "http_request_duration_seconds_count": successful_payload(
+            "120", {"job": "devops-digital-twin"}
+        ),
+        "up": successful_payload("1", {"job": "devops-digital-twin"}),
+        PrometheusCollector.CONTAINER_CPU_QUERY: successful_samples_payload(
+            [
+                ("0.1", {"pod": "devops-digital-twin-a"}),
+                ("0.2", {"pod": "devops-digital-twin-b"}),
+            ]
+        ),
+        PrometheusCollector.CONTAINER_MEMORY_QUERY: successful_samples_payload(
+            [
+                ("67108864", {"pod": "devops-digital-twin-a"}),
+                ("134217728", {"pod": "devops-digital-twin-b"}),
+            ]
+        ),
+    }
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        return response_for(payloads[request.url.params["query"]])
+
+    state = collector_for(respond).collect(
+        resource_limits=KubernetesContainerResourceLimits(0.5, 268435456.0)
+    )
+    instance = state.get_service("devops-digital-twin").get_instance(
+        "devops-digital-twin-service"
+    )
+
+    assert instance.cpu_capacity == 1.0
+    assert instance.memory_capacity == 536870912.0
+    assert instance.cpu_utilization == pytest.approx(30.0)
+    assert instance.memory_utilization == 37.5
+
+
+def test_collect_preserves_zero_usage_and_missing_resource_independently() -> None:
+    payloads = {
+        "http_requests_total": successful_payload("1"),
+        "http_request_duration_seconds_count": successful_payload("1"),
+        "up": successful_payload("1"),
+        PrometheusCollector.CONTAINER_CPU_QUERY: successful_samples_payload(
+            [("0", {"pod": "devops-digital-twin-a"})]
+        ),
+        PrometheusCollector.CONTAINER_MEMORY_QUERY: successful_samples_payload([]),
+    }
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        return response_for(payloads[request.url.params["query"]])
+
+    state = collector_for(respond).collect(
+        resource_limits=KubernetesContainerResourceLimits(0.5, 268435456.0)
+    )
+    instance = state.get_service("devops-digital-twin").get_instance(
+        "devops-digital-twin-service"
+    )
+
+    assert instance.cpu_capacity == 0.5
+    assert instance.cpu_utilization == 0.0
+    assert instance.memory_capacity is None
+    assert instance.memory_utilization is None
 
 
 def test_collect_updates_existing_state_without_replacing_service() -> None:

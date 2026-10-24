@@ -80,9 +80,15 @@ class BottleneckDetector:
             for instance in service.instances.values()
             if instance.status is InstanceStatus.HEALTHY
         ]
+        unhealthy_instances = [
+            instance
+            for instance in service.instances.values()
+            if instance.status is InstanceStatus.UNHEALTHY
+        ]
+
         total_instance_count = len(service.instances)
         healthy_instance_count = len(healthy_instances)
-        unhealthy_instance_count = total_instance_count - healthy_instance_count
+        unhealthy_instance_count = len(unhealthy_instances)
         cpu_utilization = self._average_utilization(
             healthy_instances, "cpu_utilization", service.total_cpu_capacity
         )
@@ -141,14 +147,14 @@ class BottleneckDetector:
     def _average_utilization(
         instances: list,
         field_name: str,
-        total_capacity: float,
+        total_capacity: float | None,
     ) -> float | None:
-        if not instances or total_capacity <= 0:
+        if not instances or total_capacity is None or total_capacity <= 0:
             return None
         values = [getattr(instance, field_name) for instance in instances]
-        if any(value <= 0 for value in values):
+        if any(value is None for value in values):
             return None
-        return sum(values) / len(values)
+        return sum(value for value in values if value is not None) / len(values)
 
     def _classify(self, utilization: float | None) -> BottleneckStatus:
         if utilization is None:

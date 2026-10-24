@@ -6,6 +6,7 @@ from typing import Any, Protocol
 
 import httpx
 
+from .kubernetes_adapter import KubernetesContainerResourceLimits
 from .models import Infrastructure, Instance, InstanceStatus, Service
 
 
@@ -70,6 +71,7 @@ class PrometheusCollector:
         base_url: str,
         client: HttpClient | None = None,
         timeout: float = 5.0,
+        namespace: str = "default",
     ) -> None:
         """Create a collector for a configurable Prometheus base URL."""
         normalized_url = base_url.strip().rstrip("/")
@@ -80,6 +82,9 @@ class PrometheusCollector:
 
         self.base_url = normalized_url
         self.timeout = timeout
+        if not namespace.strip():
+            raise ValueError("namespace must not be empty")
+        self.namespace = namespace
         self._client = client or httpx.Client()
 
     def query(self, promql: str) -> list[PrometheusSample]:
@@ -134,8 +139,14 @@ class PrometheusCollector:
 
     def query_container_metrics(self) -> list[KubernetesContainerMetrics]:
         """Query and merge current CPU and memory metrics by pod name."""
-        cpu_samples = self.query(self.CONTAINER_CPU_QUERY)
-        memory_samples = self.query(self.CONTAINER_MEMORY_QUERY)
+        cpu_query = self.CONTAINER_CPU_QUERY.replace(
+            'namespace="default"', f'namespace="{self.namespace}"'
+        )
+        memory_query = self.CONTAINER_MEMORY_QUERY.replace(
+            'namespace="default"', f'namespace="{self.namespace}"'
+        )
+        cpu_samples = self.query(cpu_query)
+        memory_samples = self.query(memory_query)
         cpu_by_pod = self._container_samples_by_pod(cpu_samples)
         memory_by_pod = self._container_samples_by_pod(memory_samples)
 
@@ -148,17 +159,25 @@ class PrometheusCollector:
             for pod_name in sorted(cpu_by_pod.keys() | memory_by_pod.keys())
         ]
 
-    def collect(self, infrastructure: Infrastructure | None = None) -> Infrastructure:
+    def collect(
+        self,
+        infrastructure: Infrastructure | None = None,
+        resource_limits: KubernetesContainerResourceLimits | None = None,
+    ) -> Infrastructure:
         """Collect current application metrics into an infrastructure state.
 
         The current Prometheus setup exposes service-level metrics through a
         ClusterIP Service, so this creates one aggregate observed instance.
-        CPU and memory fields remain zero because those metrics are not
-        currently collected.
+        When live Kubernetes limits are supplied, container metrics are merged
+        into the aggregate instance. Without limits, legacy zero resource
+        fields are retained for callers that only collect service metrics.
         """
         request_samples = self.query(self.REQUESTS_QUERY)
         latency_samples = self.query(self.LATENCY_COUNT_QUERY)
         health_samples = self.query(self.HEALTH_QUERY)
+        container_metrics = (
+            self.query_container_metrics() if resource_limits is not None else []
+        )
 
         state = infrastructure or Infrastructure()
         service = state.services.get(self.SERVICE_NAME)
@@ -168,10 +187,18 @@ class PrometheusCollector:
 
         request_count = self._total(request_samples)
         latency_count = self._total(latency_samples)
+        cpu_capacity, cpu_utilization = self._aggregate_resource(
+            container_metrics, resource_limits, "cpu_cores"
+        )
+        memory_capacity, memory_utilization = self._aggregate_resource(
+            container_metrics, resource_limits, "memory_bytes"
+        )
         instance = Instance(
             name=self.TARGET_INSTANCE_NAME,
-            cpu_capacity=0.0,
-            memory_capacity=0.0,
+            cpu_capacity=cpu_capacity,
+            memory_capacity=memory_capacity,
+            cpu_utilization=cpu_utilization,
+            memory_utilization=memory_utilization,
             request_rate=request_count,
             request_count=request_count,
             request_latency_count=latency_count,
@@ -179,6 +206,28 @@ class PrometheusCollector:
         )
         service.instances[instance.name] = instance
         return state
+
+    @staticmethod
+    def _aggregate_resource(
+        metrics: list[KubernetesContainerMetrics],
+        limits: KubernetesContainerResourceLimits | None,
+        resource: str,
+    ) -> tuple[float | None, float | None]:
+        if limits is None:
+            return 0.0, 0.0
+        if not metrics:
+            return None, None
+        values = [getattr(metric, resource) for metric in metrics]
+        if any(value is None for value in values):
+            return None, None
+        limit = (
+            limits.cpu_cores
+            if resource == "cpu_cores"
+            else limits.memory_bytes
+        )
+        capacity = limit * len(metrics)
+        usage = sum(value for value in values if value is not None)
+        return capacity, usage / capacity * 100
 
     def close(self) -> None:
         """Close the underlying HTTP client when it supports closing."""

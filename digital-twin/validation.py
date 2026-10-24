@@ -126,7 +126,9 @@ class ExperimentValidationService:
         try:
             return self.metric_mapper(execution_result, actual_result)
         except Exception as error:
-            raise ValidationError("prediction metrics could not be mapped") from error
+            raise ValidationError(
+                f"prediction metrics could not be mapped: {error}"
+            ) from error
 
     def _compare(
         self,

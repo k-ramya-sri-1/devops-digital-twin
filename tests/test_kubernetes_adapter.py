@@ -7,6 +7,7 @@ import pytest
 
 adapter_module = importlib.import_module("digital-twin.kubernetes_adapter")
 KubernetesDeploymentState = adapter_module.KubernetesDeploymentState
+KubernetesContainerResourceLimits = adapter_module.KubernetesContainerResourceLimits
 KubernetesExperimentAdapter = adapter_module.KubernetesExperimentAdapter
 KubernetesExperimentError = adapter_module.KubernetesExperimentError
 
@@ -19,6 +20,18 @@ def deployment(name="devops-digital-twin", namespace="default", replicas=3, read
             ready_replicas=replicas if ready is None else ready,
             available_replicas=replicas if available is None else available,
             updated_replicas=replicas if updated is None else updated,
+        ),
+        spec_template=SimpleNamespace(
+            spec=SimpleNamespace(
+                containers=[
+                    SimpleNamespace(
+                        name="devops-digital-twin-app",
+                        resources=SimpleNamespace(
+                            limits={"cpu": "500m", "memory": "256Mi"}
+                        ),
+                    )
+                ]
+            )
         ),
     )
 
@@ -50,6 +63,55 @@ def test_get_deployment_state_converts_api_failure():
 
     with pytest.raises(KubernetesExperimentError):
         make_adapter(api).get_deployment_state()
+
+
+def test_get_container_resource_limits_parses_live_quantities():
+    api = Mock()
+    live = deployment()
+    live.spec.template = live.spec_template
+    api.read_namespaced_deployment.return_value = live
+
+    limits = make_adapter(api).get_container_resource_limits(
+        "devops-digital-twin-app"
+    )
+
+    assert limits == KubernetesContainerResourceLimits(0.5, 268435456.0)
+
+
+@pytest.mark.parametrize(
+    "deployment_change",
+    [
+        lambda value: setattr(
+            value.spec.template.spec.containers[0], "resources", None
+        ),
+        lambda value: value.spec.template.spec.containers[0].resources.limits.__setitem__(
+            "cpu", "invalid"
+        ),
+        lambda value: value.spec.template.spec.containers[0].resources.limits.__setitem__(
+            "memory", "0"
+        ),
+    ],
+)
+def test_get_container_resource_limits_rejects_unavailable_limits(deployment_change):
+    api = Mock()
+    live = deployment()
+    live.spec.template = live.spec_template
+    deployment_change(live)
+    api.read_namespaced_deployment.return_value = live
+
+    with pytest.raises(KubernetesExperimentError):
+        make_adapter(api).get_container_resource_limits("devops-digital-twin-app")
+
+
+def test_get_container_resource_limits_rejects_missing_container():
+    api = Mock()
+    live = deployment()
+    live.spec.template = live.spec_template
+    live.spec.template.spec.containers = []
+    api.read_namespaced_deployment.return_value = live
+
+    with pytest.raises(KubernetesExperimentError):
+        make_adapter(api).get_container_resource_limits("devops-digital-twin-app")
 
 
 @pytest.mark.parametrize("value", [0, -1, 1.5, True, "3"])

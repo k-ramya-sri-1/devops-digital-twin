@@ -103,10 +103,10 @@ class ExecuteExperimentRequest(BaseModel):
 
 class InstanceExecutionResponse(BaseModel):
     name: str
-    cpu_capacity: float
-    memory_capacity: float
-    cpu_utilization: float
-    memory_utilization: float
+    cpu_capacity: float | None
+    memory_capacity: float | None
+    cpu_utilization: float | None
+    memory_utilization: float | None
     request_rate: float
     status: InstanceStatus
     request_count: float
@@ -137,8 +137,8 @@ class InstanceFailureSimulationResponse(BaseModel):
     instance_name: str
     healthy_instance_count: int
     unhealthy_instance_count: int
-    remaining_cpu_capacity: float
-    remaining_memory_capacity: float
+    remaining_cpu_capacity: float | None
+    remaining_memory_capacity: float | None
 
 
 class ScaleOutSimulationResponse(BaseModel):
@@ -146,13 +146,13 @@ class ScaleOutSimulationResponse(BaseModel):
     service_name: str
     additional_instances: int
     simulated_instance_count: int
-    total_cpu_capacity: float
-    total_memory_capacity: float
+    total_cpu_capacity: float | None
+    total_memory_capacity: float | None
 
 
 class CapacitySnapshotResponse(BaseModel):
-    cpu: float
-    memory: float
+    cpu: float | None
+    memory: float | None
 
 
 class TrafficImpactResponse(BaseModel):
@@ -192,10 +192,10 @@ class ResourcePredictionResponse(BaseModel):
     workload_multiplier: float | None
     healthy_instance_count: int
     total_instance_count: int
-    cpu_capacity: float
-    memory_capacity: float
-    healthy_cpu_capacity: float
-    healthy_memory_capacity: float
+    cpu_capacity: float | None
+    memory_capacity: float | None
+    healthy_cpu_capacity: float | None
+    healthy_memory_capacity: float | None
     projected_cpu_demand: float | None
     projected_memory_demand: float | None
     cpu_status: ResourceStatus
@@ -212,10 +212,10 @@ class BottleneckResponse(BaseModel):
     total_instance_count: int
     healthy_instance_count: int
     unhealthy_instance_count: int
-    total_cpu_capacity: float
-    total_memory_capacity: float
-    healthy_cpu_capacity: float
-    healthy_memory_capacity: float
+    total_cpu_capacity: float | None
+    total_memory_capacity: float | None
+    healthy_cpu_capacity: float | None
+    healthy_memory_capacity: float | None
     overall_status: BottleneckStatus
     reasons: list[str]
 
@@ -318,6 +318,9 @@ def get_current_state_service() -> CurrentStateService:
     return CurrentStateService(
         get_prometheus_collector(),
         replica_count_provider=lambda: adapter.get_deployment_state().desired_replicas,
+        resource_limits_provider=lambda: adapter.get_container_resource_limits(
+            "devops-digital-twin-app"
+        ),
     )
 
 

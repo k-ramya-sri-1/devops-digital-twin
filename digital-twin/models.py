@@ -15,12 +15,16 @@ class InstanceStatus(str, Enum):
     STOPPED = "stopped"
 
 
-def _validate_non_negative(value: float, field_name: str) -> None:
+def _validate_non_negative(value: float | None, field_name: str) -> None:
+    if value is None:
+        return
     if not isfinite(value) or value < 0:
         raise ValueError(f"{field_name} must be a non-negative finite number")
 
 
-def _validate_utilization(value: float, field_name: str) -> None:
+def _validate_utilization(value: float | None, field_name: str) -> None:
+    if value is None:
+        return
     if not isfinite(value) or not 0 <= value <= 100:
         raise ValueError(f"{field_name} must be between 0 and 100")
 
@@ -35,10 +39,10 @@ class Instance:
     """Represent one application instance or pod and its current state."""
 
     name: str
-    cpu_capacity: float
-    memory_capacity: float
-    cpu_utilization: float = 0.0
-    memory_utilization: float = 0.0
+    cpu_capacity: float | None
+    memory_capacity: float | None
+    cpu_utilization: float | None = 0.0
+    memory_utilization: float | None = 0.0
     request_rate: float = 0.0
     status: InstanceStatus = InstanceStatus.STARTING
     request_count: float = 0.0
@@ -138,32 +142,38 @@ class Service:
             raise KeyError(f"instance not found: {instance_name}") from error
 
     @property
-    def total_cpu_capacity(self) -> float:
+    def total_cpu_capacity(self) -> float | None:
         """Return the aggregate CPU capacity across all instances."""
+        if any(instance.cpu_capacity is None for instance in self.instances.values()):
+            return None
         return sum(instance.cpu_capacity for instance in self.instances.values())
 
     @property
-    def total_memory_capacity(self) -> float:
+    def total_memory_capacity(self) -> float | None:
         """Return the aggregate memory capacity across all instances."""
+        if any(instance.memory_capacity is None for instance in self.instances.values()):
+            return None
         return sum(instance.memory_capacity for instance in self.instances.values())
 
     @property
-    def average_cpu_utilization(self) -> float:
+    def average_cpu_utilization(self) -> float | None:
         """Return the arithmetic mean CPU utilization across instances."""
         if not self.instances:
             return 0.0
-        return sum(
-            instance.cpu_utilization for instance in self.instances.values()
-        ) / len(self.instances)
+        values = [instance.cpu_utilization for instance in self.instances.values()]
+        if any(value is None for value in values):
+            return None
+        return sum(value for value in values if value is not None) / len(values)
 
     @property
-    def average_memory_utilization(self) -> float:
+    def average_memory_utilization(self) -> float | None:
         """Return the arithmetic mean memory utilization across instances."""
         if not self.instances:
             return 0.0
-        return sum(
-            instance.memory_utilization for instance in self.instances.values()
-        ) / len(self.instances)
+        values = [instance.memory_utilization for instance in self.instances.values()]
+        if any(value is None for value in values):
+            return None
+        return sum(value for value in values if value is not None) / len(values)
 
     @property
     def unhealthy_instances(self) -> list[Instance]:
@@ -202,32 +212,42 @@ class Infrastructure:
             raise KeyError(f"service not found: {service_name}") from error
 
     @property
-    def total_cpu_capacity(self) -> float:
+    def total_cpu_capacity(self) -> float | None:
         """Return aggregate CPU capacity across all services."""
-        return sum(service.total_cpu_capacity for service in self.services.values())
+        capacities = [service.total_cpu_capacity for service in self.services.values()]
+        if any(capacity is None for capacity in capacities):
+            return None
+        return sum(capacity for capacity in capacities if capacity is not None)
 
     @property
-    def total_memory_capacity(self) -> float:
+    def total_memory_capacity(self) -> float | None:
         """Return aggregate memory capacity across all services."""
-        return sum(
-            service.total_memory_capacity for service in self.services.values()
-        )
+        capacities = [service.total_memory_capacity for service in self.services.values()]
+        if any(capacity is None for capacity in capacities):
+            return None
+        return sum(capacity for capacity in capacities if capacity is not None)
 
     @property
-    def average_cpu_utilization(self) -> float:
+    def average_cpu_utilization(self) -> float | None:
         """Return the arithmetic mean CPU utilization across all instances."""
         instances = self._instances()
         if not instances:
             return 0.0
-        return sum(instance.cpu_utilization for instance in instances) / len(instances)
+        values = [instance.cpu_utilization for instance in instances]
+        if any(value is None for value in values):
+            return None
+        return sum(value for value in values if value is not None) / len(values)
 
     @property
-    def average_memory_utilization(self) -> float:
+    def average_memory_utilization(self) -> float | None:
         """Return the arithmetic mean memory utilization across all instances."""
         instances = self._instances()
         if not instances:
             return 0.0
-        return sum(instance.memory_utilization for instance in instances) / len(instances)
+        values = [instance.memory_utilization for instance in instances]
+        if any(value is None for value in values):
+            return None
+        return sum(value for value in values if value is not None) / len(values)
 
     @property
     def unhealthy_instances(self) -> list[Instance]:

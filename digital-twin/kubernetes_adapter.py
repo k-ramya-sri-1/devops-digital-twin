@@ -1,6 +1,8 @@
 """Safe Kubernetes Deployment operations for infrastructure experiments."""
 
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
+from math import isfinite
 import time
 from typing import Any
 
@@ -21,6 +23,14 @@ class KubernetesDeploymentState:
     ready_replicas: int
     available_replicas: int
     updated_replicas: int
+
+
+@dataclass(frozen=True)
+class KubernetesContainerResourceLimits:
+    """Live CPU and memory limits for one Deployment container."""
+
+    cpu_cores: float
+    memory_bytes: float
 
 
 class KubernetesExperimentAdapter:
@@ -67,6 +77,97 @@ class KubernetesExperimentAdapter:
             available_replicas=status.available_replicas or 0,
             updated_replicas=status.updated_replicas or 0,
         )
+
+    def get_container_resource_limits(
+        self,
+        container_name: str,
+    ) -> KubernetesContainerResourceLimits:
+        """Read CPU and memory limits from the live Deployment template."""
+        deployment = self._read_deployment()
+        try:
+            container = next(
+                item
+                for item in deployment.spec.template.spec.containers
+                if item.name == container_name
+            )
+            limits = container.resources.limits
+            cpu = self._parse_quantity(limits["cpu"], "cpu", self._CPU_UNITS)
+            memory = self._parse_quantity(
+                limits["memory"], "memory", self._MEMORY_UNITS
+            )
+        except (
+            AttributeError,
+            KeyError,
+            StopIteration,
+            TypeError,
+            ValueError,
+        ) as error:
+            raise KubernetesExperimentError(
+                f"could not read resource limits for container '{container_name}'"
+            ) from error
+        return KubernetesContainerResourceLimits(cpu_cores=cpu, memory_bytes=memory)
+
+    _CPU_UNITS = {
+        "n": Decimal("1e-9"),
+        "u": Decimal("1e-6"),
+        "m": Decimal("1e-3"),
+        "": Decimal("1"),
+    }
+    _MEMORY_UNITS = {
+        "Ki": Decimal(1024),
+        "Mi": Decimal(1024**2),
+        "Gi": Decimal(1024**3),
+        "Ti": Decimal(1024**4),
+        "Pi": Decimal(1024**5),
+        "Ei": Decimal(1024**6),
+        "k": Decimal(1000),
+        "M": Decimal(1000**2),
+        "G": Decimal(1000**3),
+        "T": Decimal(1000**4),
+        "P": Decimal(1000**5),
+        "E": Decimal(1000**6),
+        "": Decimal(1),
+    }
+
+    def _read_deployment(self) -> Any:
+        try:
+            return self.apps_api_client.read_namespaced_deployment(
+                name=self.deployment_name,
+                namespace=self.namespace,
+            )
+        except Exception as error:
+            raise KubernetesExperimentError(
+                f"could not read Deployment '{self.deployment_name}'"
+            ) from error
+
+    @staticmethod
+    def _parse_quantity(
+        value: str,
+        resource_name: str,
+        units: dict[str, Decimal],
+    ) -> float:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{resource_name} limit is missing")
+        text = value.strip()
+        suffix = next(
+            (
+                candidate
+                for candidate in sorted(units, key=len, reverse=True)
+                if text.endswith(candidate)
+            ),
+            None,
+        )
+        if suffix is None:
+            raise ValueError(f"unsupported {resource_name} quantity")
+        try:
+            amount = Decimal(text[: -len(suffix)] if suffix else text)
+        except InvalidOperation as error:
+            raise ValueError(f"invalid {resource_name} quantity") from error
+        result = amount * units[suffix]
+        numeric_result = float(result)
+        if not isfinite(numeric_result) or numeric_result <= 0:
+            raise ValueError(f"{resource_name} limit must be positive")
+        return numeric_result
 
     def scale_replicas(self, target_replicas: int) -> None:
         """Patch only the Deployment scale subresource replica count."""

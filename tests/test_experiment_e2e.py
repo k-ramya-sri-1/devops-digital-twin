@@ -223,7 +223,7 @@ def test_complete_execute_impact_recommendation_flow(e2e_setup):
     assert impact["service_name"] == SERVICE_NAME
     assert impact["simulated_impact"]["simulated_instance_count"] == 3
     assert impact["predicted_demand"]["cpu_status"] == "SUFFICIENT"
-    assert impact["bottleneck"]["overall_status"] == "WARNING"
+    assert impact["bottleneck"]["overall_status"] == "NO_BOTTLENECK"
     assert "actual validation is pending or unavailable" in impact["limitations"]
 
     recommendations_response = client.get(
@@ -232,11 +232,11 @@ def test_complete_execute_impact_recommendation_flow(e2e_setup):
     assert recommendations_response.status_code == 200
     recommendations = recommendations_response.json()
     assert recommendations["experiment_id"] == EXPERIMENT_ID
-    assert recommendations["overall_priority"] == "MEDIUM"
+    assert recommendations["overall_priority"] == "LOW"
     assert recommendations["recommendations"]
     recommendation = recommendations["recommendations"][0]
-    assert recommendation["action"] == "MONITOR"
-    assert recommendation["priority"] == "MEDIUM"
+    assert recommendation["action"] == "MAINTAIN"
+    assert recommendation["priority"] == "LOW"
     assert recommendation["reason"]
     assert recommendation["evidence"]
     assert recommendation["experiment_id"] == EXPERIMENT_ID

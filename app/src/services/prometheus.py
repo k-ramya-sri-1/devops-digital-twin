@@ -11,5 +11,6 @@ PrometheusCollector = collector_module.PrometheusCollector
 def get_prometheus_collector() -> PrometheusCollector:
     """Provide a Prometheus collector using the configured API base URL."""
     return PrometheusCollector(
-        os.getenv("PROMETHEUS_URL", "http://localhost:9090")
+        os.getenv("PROMETHEUS_URL", "http://localhost:9090"),
+        namespace=os.getenv("KUBERNETES_NAMESPACE", "default"),
     )

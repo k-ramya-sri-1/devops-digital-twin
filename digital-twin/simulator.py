@@ -31,8 +31,8 @@ class InstanceFailureResult:
     instance_name: str
     healthy_instance_count: int
     unhealthy_instance_count: int
-    remaining_cpu_capacity: float
-    remaining_memory_capacity: float
+    remaining_cpu_capacity: float | None
+    remaining_memory_capacity: float | None
 
 
 @dataclass(frozen=True)
@@ -107,11 +107,11 @@ class DigitalTwinSimulator:
             instance_name=instance_name,
             healthy_instance_count=len(healthy_instances),
             unhealthy_instance_count=len(unhealthy_instances),
-            remaining_cpu_capacity=sum(
-                instance.cpu_capacity for instance in healthy_instances
+            remaining_cpu_capacity=self._capacity(
+                healthy_instances, "cpu_capacity"
             ),
-            remaining_memory_capacity=sum(
-                instance.memory_capacity for instance in healthy_instances
+            remaining_memory_capacity=self._capacity(
+                healthy_instances, "memory_capacity"
             ),
         )
 
@@ -132,6 +132,10 @@ class DigitalTwinSimulator:
         simulated = deepcopy(infrastructure)
         simulated_service = simulated.get_service(service.name)
         template = simulated_service.instances[sorted(simulated_service.instances)[0]]
+        if template.cpu_capacity is None or template.memory_capacity is None:
+            raise SimulationError(
+                "service instance capacity is unavailable for scale out"
+            )
         for index in range(1, additional_instances + 1):
             instance_name = self._next_instance_name(
                 simulated_service, index
@@ -162,6 +166,13 @@ class DigitalTwinSimulator:
             return infrastructure.get_service(service_name)
         except KeyError as error:
             raise SimulationError(f"unknown service '{service_name}'") from error
+
+    @staticmethod
+    def _capacity(instances: list[Instance], field_name: str) -> float | None:
+        values = [getattr(instance, field_name) for instance in instances]
+        if any(value is None for value in values):
+            return None
+        return sum(value for value in values if value is not None)
 
     @staticmethod
     def _validate_multiplier(multiplier: float) -> None:

@@ -16,7 +16,10 @@ BottleneckThresholds = bottleneck.BottleneckThresholds
 
 
 def make_infrastructure(
-    *, cpu: float = 50.0, memory: float = 40.0, unhealthy: int = 0
+    *,
+    cpu: float | None = 50.0,
+    memory: float | None = 40.0,
+    unhealthy: int = 0,
 ) -> Infrastructure:
     service = Service(name="devops-digital-twin")
     for index in range(3):
@@ -114,7 +117,7 @@ def test_overall_warning_state() -> None:
 
 def test_insufficient_utilization_data() -> None:
     result = BottleneckDetector().analyze(
-        make_infrastructure(cpu=0.0, memory=0.0), "devops-digital-twin"
+        make_infrastructure(cpu=None, memory=None), "devops-digital-twin"
     )
 
     assert result.cpu_utilization is None

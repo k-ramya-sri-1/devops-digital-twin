@@ -18,8 +18,8 @@ class AnalysisError(ValueError):
 class CapacitySnapshot:
     """CPU and memory capacity represented by a service state."""
 
-    cpu: float
-    memory: float
+    cpu: float | None
+    memory: float | None
 
 
 @dataclass(frozen=True)
@@ -132,8 +132,10 @@ class ScenarioImpactAnalyzer:
             original_capacity=original_capacity,
             simulated_capacity=simulated_capacity,
             capacity_change=CapacitySnapshot(
-                cpu=simulated_capacity.cpu - original_capacity.cpu,
-                memory=simulated_capacity.memory - original_capacity.memory,
+                cpu=self._difference(simulated_capacity.cpu, original_capacity.cpu),
+                memory=self._difference(
+                    simulated_capacity.memory, original_capacity.memory
+                ),
             ),
             healthy_instance_change=simulated_healthy_count - original_healthy_count,
         )
@@ -160,8 +162,10 @@ class ScenarioImpactAnalyzer:
             original_capacity=original_capacity,
             simulated_capacity=simulated_capacity,
             capacity_change=CapacitySnapshot(
-                cpu=simulated_capacity.cpu - original_capacity.cpu,
-                memory=simulated_capacity.memory - original_capacity.memory,
+                cpu=self._difference(simulated_capacity.cpu, original_capacity.cpu),
+                memory=self._difference(
+                    simulated_capacity.memory, original_capacity.memory
+                ),
             ),
         )
 
@@ -197,3 +201,12 @@ class ScenarioImpactAnalyzer:
             cpu=service.total_cpu_capacity,
             memory=service.total_memory_capacity,
         )
+
+    @staticmethod
+    def _difference(
+        current: float | None,
+        original: float | None,
+    ) -> float | None:
+        if current is None or original is None:
+            return None
+        return current - original

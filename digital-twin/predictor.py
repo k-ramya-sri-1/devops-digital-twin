@@ -33,10 +33,10 @@ class ResourcePredictionResult:
     workload_multiplier: float | None
     healthy_instance_count: int
     total_instance_count: int
-    cpu_capacity: float
-    memory_capacity: float
-    healthy_cpu_capacity: float
-    healthy_memory_capacity: float
+    cpu_capacity: float | None
+    memory_capacity: float | None
+    healthy_cpu_capacity: float | None
+    healthy_memory_capacity: float | None
     projected_cpu_demand: float | None
     projected_memory_demand: float | None
     cpu_status: ResourceStatus
@@ -102,12 +102,13 @@ class ResourceDemandPredictor:
             multiplier=workload_multiplier,
             insufficient_data=insufficient_data,
         )
-        cpu_status = self._resource_status(
-            projected_cpu_demand, sum(i.cpu_capacity for i in healthy_instances)
+        healthy_cpu_capacity = self._capacity(healthy_instances, "cpu_capacity")
+        healthy_memory_capacity = self._capacity(
+            healthy_instances, "memory_capacity"
         )
+        cpu_status = self._resource_status(projected_cpu_demand, healthy_cpu_capacity)
         memory_status = self._resource_status(
-            projected_memory_demand,
-            sum(i.memory_capacity for i in healthy_instances),
+            projected_memory_demand, healthy_memory_capacity
         )
         if not healthy_instances:
             insufficient_data.append("healthy_instances")
@@ -123,10 +124,8 @@ class ResourceDemandPredictor:
             total_instance_count=len(service.instances),
             cpu_capacity=service.total_cpu_capacity,
             memory_capacity=service.total_memory_capacity,
-            healthy_cpu_capacity=sum(i.cpu_capacity for i in healthy_instances),
-            healthy_memory_capacity=sum(
-                i.memory_capacity for i in healthy_instances
-            ),
+            healthy_cpu_capacity=healthy_cpu_capacity,
+            healthy_memory_capacity=healthy_memory_capacity,
             projected_cpu_demand=projected_cpu_demand,
             projected_memory_demand=projected_memory_demand,
             cpu_status=cpu_status,
@@ -171,7 +170,11 @@ class ResourceDemandPredictor:
             getattr(instance, f"{resource}_utilization")
             for instance in healthy_instances
         ]
-        if not any(value > 0 for value in utilization_values):
+        capacities = [
+            getattr(instance, f"{resource}_capacity")
+            for instance in healthy_instances
+        ]
+        if any(value is None for value in utilization_values + capacities):
             insufficient_data.append(f"{resource}_utilization")
             return None
         baseline_demand = sum(
@@ -181,11 +184,18 @@ class ResourceDemandPredictor:
         return baseline_demand * multiplier
 
     @staticmethod
+    def _capacity(instances: list, field_name: str) -> float | None:
+        values = [getattr(instance, field_name) for instance in instances]
+        if any(value is None for value in values):
+            return None
+        return sum(value for value in values if value is not None)
+
+    @staticmethod
     def _resource_status(
         projected_demand: float | None,
-        healthy_capacity: float,
+        healthy_capacity: float | None,
     ) -> ResourceStatus:
-        if projected_demand is None:
+        if projected_demand is None or healthy_capacity is None:
             return ResourceStatus.INSUFFICIENT_DATA
         if projected_demand <= healthy_capacity:
             return ResourceStatus.SUFFICIENT

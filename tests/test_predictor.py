@@ -19,8 +19,8 @@ ResourceStatus = predictor.ResourceStatus
 def make_infrastructure(
     *,
     request_rate: float = 100.0,
-    cpu_utilization: float = 50.0,
-    memory_utilization: float = 25.0,
+    cpu_utilization: float | None = 50.0,
+    memory_utilization: float | None = 25.0,
     healthy: bool = True,
 ) -> Infrastructure:
     service = Service(name="devops-digital-twin")
@@ -101,7 +101,7 @@ def test_zero_baseline_request_rate_is_not_projectable() -> None:
 
 
 def test_insufficient_cpu_data() -> None:
-    infrastructure = make_infrastructure(cpu_utilization=0.0)
+    infrastructure = make_infrastructure(cpu_utilization=None)
 
     result = ResourceDemandPredictor().predict(
         infrastructure, "devops-digital-twin", traffic_simulation(infrastructure)
@@ -113,7 +113,7 @@ def test_insufficient_cpu_data() -> None:
 
 
 def test_insufficient_memory_data() -> None:
-    infrastructure = make_infrastructure(memory_utilization=0.0)
+    infrastructure = make_infrastructure(memory_utilization=None)
 
     result = ResourceDemandPredictor().predict(
         infrastructure, "devops-digital-twin", traffic_simulation(infrastructure)
@@ -122,6 +122,21 @@ def test_insufficient_memory_data() -> None:
     assert result.projected_memory_demand is None
     assert result.memory_status is ResourceStatus.INSUFFICIENT_DATA
     assert result.projected_cpu_demand is not None
+
+
+def test_zero_utilization_is_valid_when_measured() -> None:
+    infrastructure = make_infrastructure(
+        cpu_utilization=0.0, memory_utilization=0.0
+    )
+
+    result = ResourceDemandPredictor().predict(
+        infrastructure, "devops-digital-twin", traffic_simulation(infrastructure)
+    )
+
+    assert result.projected_cpu_demand == 0.0
+    assert result.projected_memory_demand == 0.0
+    assert result.cpu_status is ResourceStatus.SUFFICIENT
+    assert result.memory_status is ResourceStatus.SUFFICIENT
 
 
 def test_healthy_capacity_is_sufficient() -> None:
